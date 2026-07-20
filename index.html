@@ -1,72 +1,36 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Road Duel Arena — Prototype 0.1.1</title>
-  <style>
-    :root {
-      --bg:#14171d; --panel:#20252e; --panel2:#292f3a; --text:#e8edf5;
-      --muted:#aeb8c7; --accent:#f2b84b; --danger:#e35d6a; --ok:#65c18c;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:radial-gradient(circle at top,#252b35 0,#14171d 60%);color:var(--text);
-      font-family:Inter,Segoe UI,Arial,sans-serif;min-height:100vh}
-    header{padding:16px 22px;border-bottom:1px solid #343b47;background:#181c23cc;backdrop-filter:blur(8px);
-      display:flex;align-items:center;justify-content:space-between;gap:16px}
-    h1{font-size:20px;margin:0;letter-spacing:.06em;text-transform:uppercase}
-    .subtitle{color:var(--muted);font-size:12px}
-    main{display:grid;grid-template-columns:minmax(620px,1fr) 340px;gap:16px;padding:16px;max-width:1500px;margin:auto}
-    #gameWrap{position:relative;background:#0c0f14;border:1px solid #3a424f;border-radius:14px;overflow:hidden;
-      box-shadow:0 16px 40px #0008;min-height:700px}
-    canvas{display:block;width:100%;height:100%;min-height:700px}
-    .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#080b10dc;
-      padding:24px;z-index:3}
-    .card{background:linear-gradient(180deg,#252b35,#1d222b);border:1px solid #424b59;border-radius:16px;
-      padding:26px;max-width:580px;box-shadow:0 25px 70px #000b}
-    .card h2{margin:0 0 10px;font-size:28px}
-    .card p{color:var(--muted);line-height:1.5}
-    button,select{font:inherit}
-    button{background:#323946;border:1px solid #505a69;color:var(--text);border-radius:9px;padding:10px 12px;
-      cursor:pointer;font-weight:650;transition:.15s transform,.15s background}
-    button:hover{background:#3b4453;transform:translateY(-1px)}
-    button.primary{background:var(--accent);border-color:#ffd273;color:#1b1d21}
-    button.danger{background:#5b2830;border-color:#8a404b}
-    button:disabled{opacity:.4;cursor:not-allowed;transform:none}
-    .sidebar{display:flex;flex-direction:column;gap:12px}
-    .panel{background:linear-gradient(180deg,var(--panel),#1a1f27);border:1px solid #363f4b;border-radius:12px;padding:14px}
-    .panel h3{margin:0 0 10px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#cad3df}
-    .statusGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .stat{background:var(--panel2);border-radius:8px;padding:8px}
-    .stat b{display:block;font-size:18px}.stat span{font-size:11px;color:var(--muted)}
-    .controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .controls .wide{grid-column:1/-1}
-    .tiny{font-size:11px;color:var(--muted);line-height:1.4}
-    .armor{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-    .armor div{background:#282e38;padding:7px;border-radius:7px;text-align:center;font-size:12px}
-    .armor strong{display:block;font-size:16px}
-    #log{height:195px;overflow:auto;background:#12161c;border-radius:8px;padding:8px;font-family:ui-monospace,Consolas,monospace;
-      font-size:11px;line-height:1.45}
-    .good{color:var(--ok)} .bad{color:#ff8993} .warn{color:#ffd276}
-    .phasebar{display:flex;gap:5px;margin-top:8px}
-    .phase{flex:1;padding:6px 0;text-align:center;background:#2a303a;border-radius:5px;font-size:11px}
-    .phase.active{background:var(--accent);color:#17191d;font-weight:800}
-    .legend{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:11px}
-    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
-    #toast{position:absolute;left:50%;top:16px;transform:translateX(-50%);background:#111821e8;border:1px solid #5a6575;
-      border-radius:9px;padding:9px 14px;z-index:2;opacity:0;transition:.2s;pointer-events:none}
-    @media(max-width:1050px){main{grid-template-columns:1fr}.sidebar{display:grid;grid-template-columns:repeat(2,1fr)}
-      .sidebar .panel:last-child{grid-column:1/-1}}
-    @media(max-width:700px){main{padding:8px}.sidebar{grid-template-columns:1fr}#gameWrap,canvas{min-height:560px}}
-  </style>
-</head>
-<body>
-<header>
-  <div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby prototype — Version 0.1</div></div>
-  <div class="legend"><span><i class="dot" style="background:#4da3ff"></i>You</span><span><i class="dot" style="background:#ef6262"></i>AI Rival</span><span><i class="dot" style="background:#f3c763"></i>Firing arc</span></div>
-</header>
-
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.2.0</title><link rel="stylesheet" href="styles.css"></head><body>
+<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.2.0 Garage</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
 <main>
+<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.2 adds a rules-driven vehicle garage, saved designs, live validation, and arena vehicle selection.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
+
+<section id="garage" class="screen">
+<div class="sectionHead"><div><div class="eyebrow">VEHICLE DESIGN</div><h2>Garage</h2></div><div><button id="newVehicle">New Design</button> <button id="saveVehicle" class="primary">Save Vehicle</button></div></div>
+<div class="garageGrid"><div class="buildColumn">
+<div class="panel"><h3>Identity & Core</h3><div class="formGrid">
+<label>Name<input id="vehicleName" value="Blue Comet"></label><label>Budget<input id="budget" type="number" value="15000" step="500"></label>
+<label>Body<select id="bodyType"></select></label><label>Chassis<select id="chassisType"></select></label>
+<label>Suspension<select id="suspensionType"></select></label><label>Power plant<select id="plantType"></select></label>
+<label>Front tires<select id="frontTires"></select></label><label>Rear tires<select id="rearTires"></select></label>
+</div></div>
+<div class="panel"><h3>Crew</h3><div class="formGrid"><label>Driver<input value="1" disabled></label><label>Gunners<input id="gunners" type="number" value="0" min="0"></label><label>Passengers<input id="passengers" type="number" value="0" min="0"></label></div><p class="hint">Drivers and gunners use two spaces and weigh 150 lb. Passengers use one space and weigh 150 lb.</p></div>
+<div class="panel"><h3>Armor</h3><label>Armor type<select id="armorType"></select></label><div class="armorGrid">
+<label>Front<input class="armorInput" data-side="front" type="number" value="20" min="0"></label><label>Right<input class="armorInput" data-side="right" type="number" value="10" min="0"></label><label>Left<input class="armorInput" data-side="left" type="number" value="10" min="0"></label><label>Back<input class="armorInput" data-side="back" type="number" value="15" min="0"></label><label>Top<input class="armorInput" data-side="top" type="number" value="5" min="0"></label><label>Under<input class="armorInput" data-side="under" type="number" value="5" min="0"></label></div></div>
+<div class="panel"><div class="panelTitleRow"><h3>Weapons</h3><button id="addWeapon">Add Weapon</button></div><div id="weaponRows"></div><p class="hint">Loaded weapon cost, weight, space, and ammunition are used. One direction may use no more than one-third of vehicle spaces.</p></div>
+</div><aside><div class="panel sticky"><h3>Design Summary</h3><div id="validBadge" class="badge"></div>
+<div class="meterBlock"><div><span>Weight</span><strong id="weightText"></strong></div><div class="meter"><i id="weightMeter"></i></div></div>
+<div class="meterBlock"><div><span>Spaces</span><strong id="spaceText"></strong></div><div class="meter"><i id="spaceMeter"></i></div></div>
+<div class="meterBlock"><div><span>Cost</span><strong id="costText"></strong></div><div class="meter"><i id="costMeter"></i></div></div>
+<div class="statGrid"><div><b id="acceleration"></b><span>Acceleration</span></div><div><b id="topSpeed"></b><span>Top speed</span></div><div><b id="handlingClass"></b><span>Handling class</span></div><div><b id="powerFactors"></b><span>Power factors</span></div></div>
+<h4>Validation</h4><ul id="validation"></ul><h4>Saved Vehicles</h4><div id="savedVehicles"></div></div></aside></div></section>
+<section id="arenaSetup" class="screen"><div class="sectionHead"><div><div class="eyebrow">MATCH CONTROL</div><h2>Arena Setup</h2></div></div><div class="setupGrid">
+<div class="panel"><h3>Your Vehicle</h3><select id="playerVehicle"></select><div id="playerPreview" class="vehiclePreview"></div></div>
+<div class="panel"><h3>AI Vehicle</h3><select id="aiVehicle"></select><div id="aiPreview" class="vehiclePreview"></div></div>
+<div class="panel"><h3>Duel</h3><label>Starting speed<select id="startSpeed"><option>10</option><option selected>20</option><option>30</option><option>40</option></select></label><button id="launchArena" class="primary wide">Launch Arena</button><p class="hint">Combat, crashes, wall impacts, and barriers remain the v0.1 prototype.</p></div>
+</div></section>
+<section id="arena" class="screen">
+
+
+
   <section id="gameWrap">
     <canvas id="game" width="1050" height="700"></canvas>
     <div id="toast"></div>
@@ -136,265 +100,5 @@
       <div id="log"></div>
     </section>
   </aside>
-</main>
-
-<script>
-(() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  const SCALE = 18; // pixels per tabletop inch (visual approximation)
-  const arena = {x:55,y:45,w:940,h:610};
-  // Exact movement schedule from the classic Movement Chart for 0-100 mph.
-  // Values are total inches moved in each of the five phases.
-  // At odd speeds above 50 mph, the half-move is ADDITIONAL to the phase's
-  // ordinary movement (for example, 55 mph uses 1.5 inches in Phase 2).
-  const phaseMoves = {
-    0:  [0,   0,   0,   0,   0],
-    5:  [0,   0,   0,   0,   0.5],
-    10: [0,   0,   1,   0,   0],
-    15: [0,   0,   1,   0,   0.5],
-    20: [0,   1,   0,   1,   0],
-    25: [0,   1,   0,   1,   0.5],
-    30: [1,   0,   1,   0,   1],
-    35: [1,   0.5, 1,   0,   1],
-    40: [1,   1,   0,   1,   1],
-    45: [1,   1,   1,   0.5, 1],
-    50: [1,   1,   1,   1,   1],
-    55: [1,   1.5, 1,   1,   1],
-    60: [2,   1,   1,   1,   1],
-    65: [2,   1,   1,   1.5, 1],
-    70: [2,   1,   2,   1,   1],
-    75: [2,   1,   2,   1,   1.5],
-    80: [2,   1,   2,   1,   2],
-    85: [2,   1,   2.5, 1,   2],
-    90: [2,   2,   2,   1,   2],
-    95: [2,   2,   2,   1.5, 2],
-    100:[2,   2,   2,   2,   2]
-  };
-
-  // Guard against future transcription errors: each row must total speed / 10 inches.
-  Object.entries(phaseMoves).forEach(([speed, phases]) => {
-    const actual = phases.reduce((sum, value) => sum + value, 0);
-    const expected = Number(speed) / 10;
-    if (Math.abs(actual - expected) > 1e-9) {
-      throw new Error(`Movement chart error at ${speed} mph: ${actual}" total, expected ${expected}"`);
-    }
-  });
-  const controlTable = (speed, hs) => {
-    if (speed <= 20 && hs >= -5) return {safe:true};
-    const severity = Math.max(0, Math.floor((speed-20)/20) + Math.max(0,-hs));
-    if (severity <= 1) return {safe:true};
-    if (severity >= 7) return {auto:true};
-    return {target:Math.min(6, severity)};
-  };
-  const makeCar = (name,x,y,heading,color,isAI=false) => ({
-    name,x,y,heading,color,isAI,speed:20,hc:2,handling:2,accel:5,topSpeed:90,
-    armor:{front:20,right:15,left:15,back:15,top:5,under:5},
-    ammo:20, weaponDP:3, alive:true, maneuver:null, maneuverD:0, changedSpeed:false,
-    firedThisPhase:false, internal:10
-  });
-  let player = makeCar("Blue Comet",110,H/2,0,"#4da3ff");
-  let ai = makeCar("Red Jackal",W-110,H/2,180,"#ef6262",true);
-  let turn=1, phase=1, started=false, selected={type:"straight",d:0,label:"Go straight"}, locked=false;
-
-  const $ = id => document.getElementById(id);
-  const logEl=$("log");
-  function log(msg, cls=""){ const d=document.createElement("div"); d.className=cls; d.textContent=msg; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; }
-  function toast(msg){ const t=$("toast"); t.textContent=msg;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,1500); }
-  function roll(n=2){let s=0;for(let i=0;i<n;i++)s+=1+Math.floor(Math.random()*6);return s}
-  function norm(a){return (a%360+360)%360}
-  function rad(a){return a*Math.PI/180}
-  function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
-  function moveDist(car){ const row=phaseMoves[Math.round(car.speed/5)*5] || phaseMoves[100]; return row[phase-1] || 0; }
-  function sideHit(target, attacker){
-    const dx=attacker.x-target.x, dy=attacker.y-target.y;
-    const angle=norm(Math.atan2(dy,dx)*180/Math.PI-target.heading);
-    if(angle<45||angle>=315)return "front";
-    if(angle<135)return "right";
-    if(angle<225)return "back";
-    return "left";
-  }
-  function inArc(shooter,target){
-    const aim=norm(Math.atan2(target.y-shooter.y,target.x-shooter.x)*180/Math.PI);
-    let diff=Math.abs(norm(aim-shooter.heading)); if(diff>180)diff=360-diff;
-    return diff<=45;
-  }
-  function collisionWall(car){
-    const margin=18;
-    return car.x<arena.x+margin||car.x>arena.x+arena.w-margin||car.y<arena.y+margin||car.y>arena.y+arena.h-margin;
-  }
-  function damage(target, amount, side, source){
-    const absorbed=Math.min(target.armor[side],amount); target.armor[side]-=absorbed; amount-=absorbed;
-    log(`${source}: ${target.name} ${side} armor absorbs ${absorbed}.`,"warn");
-    if(amount>0){target.internal-=amount;log(`${amount} internal damage penetrates!`,"bad");}
-    if(target.internal<=0){target.alive=false;log(`${target.name} is destroyed!`,"bad");}
-  }
-  function controlCheck(car,d){
-    if(d<=0)return true;
-    car.handling=Math.max(-6,car.handling-d);
-    const c=controlTable(car.speed,car.handling);
-    if(c.safe){log(`${car.name}: D${d}; handling ${car.handling}. Control safe.`);return true}
-    if(c.auto){log(`${car.name}: automatic loss of control!`,"bad"); crash(car); return false}
-    const r=roll(1); log(`${car.name}: control roll ${r}, needs ${c.target}+.`, r>=c.target?"good":"bad");
-    if(r<c.target){crash(car);return false} return true;
-  }
-  function crash(car){
-    const r=roll(2)+Math.floor(car.speed/40);
-    const spin=(r>=8?45:15)*(Math.random()<.5?-1:1);
-    car.heading=norm(car.heading+spin);
-    car.speed=Math.max(0,car.speed-(r>=9?20:10));
-    car.handling=-6;
-    damage(car,Math.max(1,Math.floor(r/4)),Math.random()<.5?"left":"right","Crash");
-  }
-  function performMove(car,mv){
-    const inches=moveDist(car);
-    if(inches<=0)return;
-    let d=mv?.d||0;
-    if(!controlCheck(car,d)) return;
-    if(mv?.type==="bendL")car.heading=norm(car.heading-15);
-    if(mv?.type==="bendR")car.heading=norm(car.heading+15);
-    let lateral=0;
-    if(mv?.type==="driftL")lateral=-0.25*SCALE;
-    if(mv?.type==="driftR")lateral=0.25*SCALE;
-    car.x += Math.cos(rad(car.heading))*inches*SCALE + Math.cos(rad(car.heading+90))*lateral;
-    car.y += Math.sin(rad(car.heading))*inches*SCALE + Math.sin(rad(car.heading+90))*lateral;
-    if(collisionWall(car)){
-      car.x=Math.min(Math.max(car.x,arena.x+19),arena.x+arena.w-19);
-      car.y=Math.min(Math.max(car.y,arena.y+19),arena.y+arena.h-19);
-      const ram=Math.max(1,Math.floor(car.speed/10)); damage(car,roll(Math.min(6,ram)), "front","Wall collision");
-      car.speed=Math.max(0,car.speed-20); car.heading=norm(car.heading+180); car.handling=-6;
-    }
-    if(dist(player,ai)<38 && player.alive && ai.alive){
-      const rel=Math.abs(player.speed-ai.speed) || Math.max(player.speed,ai.speed);
-      const hit=Math.max(1,Math.floor(rel/15));
-      damage(player,roll(Math.min(6,hit)),sideHit(player,ai),"Vehicle collision");
-      damage(ai,roll(Math.min(6,hit)),sideHit(ai,player),"Vehicle collision");
-      player.speed=Math.max(0,player.speed-10);ai.speed=Math.max(0,ai.speed-10);
-    }
-  }
-  function fire(shooter,target){
-    if(!shooter.alive||shooter.ammo<=0||shooter.firedThisPhase||shooter.weaponDP<=0)return false;
-    if(!inArc(shooter,target)){log(`${shooter.name}: target outside front firing arc.`,"bad");return false}
-    const range=dist(shooter,target)/SCALE;
-    const rangeMod=range<=4?1:range<=12?0:range<=20?-1:-3;
-    const moveMod=target.speed>=50?-2:target.speed>=20?-1:0;
-    const maneuverMod=-(shooter.maneuverD||0);
-    const targetNum=Math.max(3,7-rangeMod-moveMod-maneuverMod);
-    const r=roll(2); shooter.ammo--; shooter.firedThisPhase=true;
-    log(`${shooter.name} fires: roll ${r}, needs ${targetNum}+ (range ${range.toFixed(1)}").`,r>=targetNum?"good":"bad");
-    if(r>=targetNum){
-      const dmg=roll(1); const side=sideHit(target,shooter);
-      log(`Hit! ${dmg} damage to ${target.name}'s ${side}.`,"good"); damage(target,dmg,side,"Machine gun");
-      controlCheck(target,dmg>=6?2:1);
-    }
-    return true;
-  }
-  function aiChoice(){
-    if(!ai.alive)return {type:"straight",d:0};
-    const desired=norm(Math.atan2(player.y-ai.y,player.x-ai.x)*180/Math.PI);
-    let delta=norm(desired-ai.heading); if(delta>180)delta-=360;
-    if(Math.abs(delta)>10)return delta<0?{type:"bendL",d:1}:{type:"bendR",d:1};
-    return {type:"straight",d:0};
-  }
-  function aiAct(){
-    const mv=aiChoice(); ai.maneuverD=mv.d; performMove(ai,mv);
-    if(ai.alive && player.alive && inArc(ai,player) && Math.random()<.75)fire(ai,player);
-  }
-  function setSelected(type,d,label){selected={type,d,label};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}.`;draw()}
-  function updateUI(){
-    $("turnNum").textContent=turn;$("phaseNum").textContent=phase;$("speed").textContent=player.speed;$("handling").textContent=player.handling;
-    $("ammo").textContent=player.ammo;$("weaponDP").textContent=player.weaponDP;
-    $("armor").innerHTML=Object.entries(player.armor).map(([k,v])=>`<div>${k}<strong>${v}</strong></div>`).join("");
-    $("phasebar").innerHTML=[1,2,3,4,5].map(p=>`<div class="phase ${p===phase?'active':''}">${p}</div>`).join("");
-    $("accel").disabled=player.changedSpeed||player.speed>=player.topSpeed;
-    $("brake").disabled=player.changedSpeed||player.speed<=0;
-    $("fire").disabled=player.firedThisPhase||player.ammo<=0||!player.alive;
-  }
-  function checkEnd(){
-    if(!player.alive||!ai.alive){
-      locked=true;$("endOverlay").style.display="flex";
-      $("endTitle").textContent=player.alive?"Victory!":"Defeat";
-      $("endText").textContent=player.alive?"The rival vehicle has been destroyed. You are the last survivor.":"Your vehicle has been destroyed in the arena.";
-    }
-  }
-  function advance(){
-    if(locked||!started)return;
-    player.maneuverD=selected.d;
-    const pm=moveDist(player), am=moveDist(ai);
-    // Faster car moves first; equal speed gives player initiative in prototype.
-    if(ai.speed>player.speed){if(am)aiAct();if(pm)performMove(player,selected)}
-    else {if(pm)performMove(player,selected);if(am)aiAct()}
-    log(`Turn ${turn}, Phase ${phase}: movement resolved.`);
-    checkEnd();
-    if(phase===5){
-      player.handling=Math.min(player.hc,player.handling+Math.max(1,player.hc));
-      ai.handling=Math.min(ai.hc,ai.handling+Math.max(1,ai.hc));
-      turn++;phase=1;player.changedSpeed=ai.changedSpeed=false;
-      log(`— Turn ${turn} begins. Handling recovered. —`,"warn");
-    } else phase++;
-    player.firedThisPhase=ai.firedThisPhase=false;
-    selected={type:"straight",d:0,label:"Go straight"};
-    $("previewText").textContent="Choose a maneuver, then commit it.";
-    updateUI();draw();checkEnd();
-  }
-  function drawArena(){
-    ctx.fillStyle="#11161c";ctx.fillRect(0,0,W,H);
-    ctx.fillStyle="#262c32";ctx.fillRect(arena.x,arena.y,arena.w,arena.h);
-    // grid
-    ctx.strokeStyle="#313840";ctx.lineWidth=1;
-    for(let x=arena.x;x<=arena.x+arena.w;x+=SCALE/2){ctx.beginPath();ctx.moveTo(x,arena.y);ctx.lineTo(x,arena.y+arena.h);ctx.stroke()}
-    for(let y=arena.y;y<=arena.y+arena.h;y+=SCALE/2){ctx.beginPath();ctx.moveTo(arena.x,y);ctx.lineTo(arena.x+arena.w,y);ctx.stroke()}
-    ctx.strokeStyle="#8a929b";ctx.lineWidth=10;ctx.strokeRect(arena.x,arena.y,arena.w,arena.h);
-    // gates
-    ctx.strokeStyle="#20262d";ctx.lineWidth=14;
-    ctx.beginPath();ctx.moveTo(arena.x, H/2-35);ctx.lineTo(arena.x,H/2+35);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(arena.x+arena.w, H/2-35);ctx.lineTo(arena.x+arena.w,H/2+35);ctx.stroke();
-    // low obstacles, original layout
-    ctx.fillStyle="#6a7078";
-    [[W/2-120,H/2-150,240,18],[W/2-120,H/2+132,240,18],[W/2-15,H/2-65,30,130]].forEach(r=>ctx.fillRect(...r));
-    ctx.fillStyle="#b7bdc4";ctx.font="bold 12px sans-serif";ctx.textAlign="center";ctx.fillText("ARENA 01",W/2,70);
-  }
-  function drawArc(car){
-    if(car!==player||!car.alive)return;
-    ctx.save();ctx.translate(car.x,car.y);ctx.rotate(rad(car.heading));
-    ctx.fillStyle="#f3c76322";ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,220,-Math.PI/4,Math.PI/4);ctx.closePath();ctx.fill();ctx.restore();
-  }
-  function drawCar(car){
-    if(!car.alive)return;
-    ctx.save();ctx.translate(car.x,car.y);ctx.rotate(rad(car.heading));
-    ctx.shadowColor="#000";ctx.shadowBlur=8;
-    ctx.fillStyle=car.color;ctx.strokeStyle="#e9eef5";ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.roundRect(-18,-10,36,20,5);ctx.fill();ctx.stroke();
-    ctx.fillStyle="#17202a";ctx.fillRect(-4,-8,10,16);
-    ctx.fillStyle="#dce6f1";ctx.fillRect(12,-5,5,10);
-    ctx.fillStyle="#0d1117";ctx.fillRect(-13,-12,8,3);ctx.fillRect(6,-12,8,3);ctx.fillRect(-13,9,8,3);ctx.fillRect(6,9,8,3);
-    ctx.restore();
-    ctx.fillStyle="#eef3f8";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(`${car.name}  ${car.speed} mph`,car.x,car.y-20);
-  }
-  function drawPreview(){
-    if(!started||!player.alive)return;
-    const inches=moveDist(player);if(!inches)return;
-    let h=player.heading;if(selected.type==="bendL")h-=15;if(selected.type==="bendR")h+=15;
-    let x=player.x+Math.cos(rad(h))*inches*SCALE,y=player.y+Math.sin(rad(h))*inches*SCALE;
-    if(selected.type==="driftL"){x+=Math.cos(rad(h+90))*(-.25*SCALE);y+=Math.sin(rad(h+90))*(-.25*SCALE)}
-    if(selected.type==="driftR"){x+=Math.cos(rad(h+90))*(.25*SCALE);y+=Math.sin(rad(h+90))*(.25*SCALE)}
-    ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle="#f2b84b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(player.x,player.y);ctx.lineTo(x,y);ctx.stroke();
-    ctx.translate(x,y);ctx.rotate(rad(h));ctx.strokeRect(-18,-10,36,20);ctx.restore();
-  }
-  function draw(){drawArena();drawArc(player);drawPreview();drawCar(player);drawCar(ai)}
-  $("startBtn").onclick=()=>{started=true;$("startOverlay").style.display="none";log("Amateur arena duel begins. Both vehicles enter at 20 mph.","warn");updateUI();draw()}
-  $("left15").onclick=()=>setSelected("bendL",1,"15° left bend");
-  $("right15").onclick=()=>setSelected("bendR",1,"15° right bend");
-  $("driftL").onclick=()=>setSelected("driftL",1,"left drift");
-  $("driftR").onclick=()=>setSelected("driftR",1,"right drift");
-  $("straight").onclick=()=>setSelected("straight",0,"go straight");
-  $("commit").onclick=advance;
-  $("accel").onclick=()=>{if(!player.changedSpeed){player.speed=Math.min(player.topSpeed,player.speed+player.accel);player.changedSpeed=true;log(`${player.name} accelerates to ${player.speed} mph.`);updateUI();draw()}};
-  $("brake").onclick=()=>{if(!player.changedSpeed){player.speed=Math.max(0,player.speed-5);player.changedSpeed=true;log(`${player.name} decelerates to ${player.speed} mph.`);updateUI();draw()}};
-  $("fire").onclick=()=>{fire(player,ai);updateUI();draw();checkEnd()};
-  updateUI();draw();
-})();
-</script>
-</body>
-</html>
+</section></main>
+<script src="src/data.js"></script><script src="src/garage.js"></script><script src="src/app.js"></script><script src="src/arena.js"></script></body></html>

@@ -1,0 +1,13 @@
+
+window.RDA_APP=(()=>{
+const $=id=>document.getElementById(id);
+const stock=[
+{id:"stock-blue",name:"Stock Blue Comet",bodyKey:"compact",bodyName:"Compact",armor:{front:20,right:10,left:10,back:15,top:5,under:5},weapons:[{weapon:"mg",mount:"front"}],weight:3450,cost:7460,acceleration:10,topSpeed:100,hc:2,valid:true},
+{id:"stock-red",name:"Stock Red Jackal",bodyKey:"midsize",bodyName:"Mid-sized",armor:{front:25,right:15,left:15,back:15,top:5,under:5},weapons:[{weapon:"rr",mount:"front"}],weight:4050,cost:6800,acceleration:5,topSpeed:100,hc:2,valid:true}];
+function show(id){document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("active",s.id===id));if(id==="arenaSetup")refreshArenaLists();window.scrollTo(0,0)}
+function all(){return[...stock,...RDA_GARAGE.getSaved()]}
+function preview(v){return `<h3>${v.name}</h3><p>${v.bodyName}</p><div class="previewStats"><div><b>${v.weight} lb</b>Weight</div><div><b>$${v.cost.toLocaleString()}</b>Cost</div><div><b>${v.acceleration} mph</b>Acceleration</div><div><b>${v.topSpeed} mph</b>Top speed</div><div><b>${v.hc}</b>HC</div><div><b>${v.weapons.length}</b>Weapons</div></div>`}
+function refreshArenaLists(){const a=all(),o=a.map(v=>`<option value="${v.id}">${v.name}${v.valid?"":" ⚠"}</option>`).join("");$("playerVehicle").innerHTML=o;$("aiVehicle").innerHTML=o;$("aiVehicle").value=a[1]?.id||a[0].id;updatePreviews()}
+function updatePreviews(){const a=all(),p=a.find(v=>v.id===$("playerVehicle").value),q=a.find(v=>v.id===$("aiVehicle").value);$("playerPreview").innerHTML=preview(p);$("aiPreview").innerHTML=preview(q)}
+function init(){document.querySelectorAll("[data-screen]").forEach(e=>e.onclick=()=>show(e.dataset.screen));RDA_GARAGE.init();refreshArenaLists();$("playerVehicle").onchange=updatePreviews;$("aiVehicle").onchange=updatePreviews;$("launchArena").onclick=()=>{const a=all(),p=a.find(v=>v.id===$("playerVehicle").value),q=a.find(v=>v.id===$("aiVehicle").value);localStorage.setItem("rdaSelectedPlayer",JSON.stringify(p));localStorage.setItem("rdaSelectedAI",JSON.stringify(q));localStorage.setItem("rdaStartSpeed",$("startSpeed").value);show("arena");document.getElementById("startOverlay").style.display="flex";document.querySelector("#startOverlay h2").textContent=`${p.name} vs ${q.name}`;document.querySelector("#startOverlay p").textContent="Selected garage vehicles are loaded. The arena combat engine remains the v0.1 prototype in this milestone."}}
+return{init,show,refreshArenaLists};})();document.addEventListener("DOMContentLoaded",RDA_APP.init);

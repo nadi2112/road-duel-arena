@@ -1,59 +1,16 @@
-# Road Duel Arena — Prototype 0.1.1
+# Road Duel Arena v0.2.0
 
-A private, browser-based hobby prototype inspired by classic pencil-and-paper vehicular combat.
+Open `index.html` directly in Chrome, Edge, or Firefox.
 
-## Run it
+## Added
+- Vehicle Garage
+- Nine body types
+- Chassis, suspension, power plants, tires, armor types
+- Crew, armor, and weapon allocation
+- Live weight, space, cost, power, acceleration, top-speed, HC, and directional weapon-space validation
+- Browser save/load/delete
+- Arena setup using saved designs
+- Modular source files
 
-1. Extract the ZIP file.
-2. Open `index.html` in Chrome, Edge, or Firefox.
-3. Click **Start Duel**.
-
-No installation, web server, package manager, or internet connection is required.
-
-## Implemented in 0.1
-
-- Original top-down arena graphics
-- Human player versus basic AI rival
-- One-second turns divided into five phases
-- Movement timing for speeds from 0 to 100 mph
-- Acceleration and deceleration once per turn
-- Straight movement, 15-degree bends, and lateral drifts
-- Handling status and simplified control checks
-- Basic crash behavior
-- Front-mounted machine gun
-- Front firing arc and range/movement modifiers
-- Directional armor
-- Internal damage and vehicle destruction
-- Arena-wall and vehicle collisions
-- Combat log and maneuver preview
-
-## Important prototype limitations
-
-This is a first playable milestone, not a complete implementation of the classic manual.
-
-- Control and crash tables are approximated in this build.
-- Collision calculations are simplified.
-- Internal component placement is simplified.
-- Only one weapon and one arena are available.
-- Vehicle construction is planned for Version 0.2.
-- The AI is intentionally basic.
-- No pedestrians, dropped weapons, fire, explosions, cycles, trikes, or campaign yet.
-
-## Controls
-
-Choose a driving action, optionally fire, and click **Commit Action / Advance Phase**.
-A vehicle moves only in phases scheduled for its current speed.
-
-## Project direction
-
-The next major milestone is the vehicle builder and a more data-driven rules engine.
-
-
-## Version 0.1.1 movement fix
-
-- Corrected the 45 mph row from 3.5 inches to 4.5 inches per turn.
-- Corrected odd speeds above 50 mph so the half-move is added to the
-  ordinary movement in that phase rather than replacing it.
-- Corrected 55, 65, 75, 85, and 95 mph.
-- Added an automatic startup check requiring every movement row to total
-  exactly `speed / 10` inches per turn.
+## Known limitations
+Six-wheel chassis, tire modifiers, cargo management, turrets, accessories, links, magazines, and component diagrams are planned. Arena combat and collision systems remain prototypes.
