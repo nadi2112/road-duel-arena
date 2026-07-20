@@ -1,4 +1,4 @@
-# Road Duel Arena — Prototype 0.1
+# Road Duel Arena — Prototype 0.1.1
 
 A private, browser-based hobby prototype inspired by classic pencil-and-paper vehicular combat.
 
@@ -47,3 +47,13 @@ A vehicle moves only in phases scheduled for its current speed.
 ## Project direction
 
 The next major milestone is the vehicle builder and a more data-driven rules engine.
+
+
+## Version 0.1.1 movement fix
+
+- Corrected the 45 mph row from 3.5 inches to 4.5 inches per turn.
+- Corrected odd speeds above 50 mph so the half-move is added to the
+  ordinary movement in that phase rather than replacing it.
+- Corrected 55, 65, 75, 85, and 95 mph.
+- Added an automatic startup check requiring every movement row to total
+  exactly `speed / 10` inches per turn.

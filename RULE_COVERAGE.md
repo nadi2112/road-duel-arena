@@ -5,7 +5,7 @@
 | System | Status | Notes |
 |---|---:|---|
 | Five phases per turn | Implemented | Phase controller and UI |
-| Speed-based movement | Partial | 0–100 mph movement rows |
+| Speed-based movement | Implemented (0–100 mph) | Exact phase totals validated automatically |
 | Acceleration | Partial | 5 mph prototype vehicle acceleration |
 | Deceleration | Partial | Safe 5 mph decrement only |
 | Handling status | Partial | Tracks reductions and end-turn recovery |
