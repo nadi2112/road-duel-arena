@@ -1,5 +1,7 @@
-# Rule Coverage v0.2.0
+# Rule Coverage v0.3.0
 
-Implemented: nine car bodies, chassis strength, suspension HC/cost, six power plants, four tire bases, five armor construction types, six armor positions, crew space/weight, loaded weapon statistics, directional weapon-space restriction, acceleration, top speed, browser save/load.
+Implemented: exact Control Table through 100 mph, speed modifiers, D-3 crash modifier, Crash Table 1 and 2 result bands, end-turn handling recovery, weapon-damage hazards, D3 arena barriers, keyboard controls.
 
-Planned: six-wheel chassis, tire modifications, cargo, turrets, accessories, links, magazines, component diagrams, exact crash/collision/combat tables.
+Approximated visually: rollover/vault animation and vault landing damage.
+
+Planned: exact vehicle and wall collisions, detailed tire/wheel integration, component diagrams.

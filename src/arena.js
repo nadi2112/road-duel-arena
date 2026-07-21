@@ -41,18 +41,26 @@
       throw new Error(`Movement chart error at ${speed} mph: ${actual}" total, expected ${expected}"`);
     }
   });
-  const controlTable = (speed, hs) => {
-    if (speed <= 20 && hs >= -5) return {safe:true};
-    const severity = Math.max(0, Math.floor((speed-20)/20) + Math.max(0,-hs));
-    if (severity <= 1) return {safe:true};
-    if (severity >= 7) return {auto:true};
-    return {target:Math.min(6, severity)};
-  };
+  const CONTROL_STATUSES=[7,6,5,4,3,2,1,0,-1,-2,-3,-4,-5,-6];
+  const CONTROL_ROWS=[
+    {min:5,max:10,v:["safe","safe","safe","safe","safe","safe","safe","safe","safe","safe","safe","safe","safe",2],m:-3},
+    {min:15,max:20,v:["safe","safe","safe","safe","safe","safe","safe","safe","safe","safe","safe","safe",2,3],m:-2},
+    {min:25,max:30,v:["safe","safe","safe","safe","safe","safe","safe","safe","safe","safe","safe","safe",2,4],m:-1},
+    {min:35,max:40,v:["safe","safe","safe","safe","safe","safe","safe","safe","safe","safe","safe",2,3,4],m:0},
+    {min:45,max:50,v:["safe","safe","safe","safe","safe","safe","safe","safe","safe","safe",2,3,4,5],m:1},
+    {min:55,max:60,v:["safe","safe","safe","safe","safe","safe","safe","safe","safe",2,3,4,4,5],m:1},
+    {min:65,max:70,v:["safe","safe","safe","safe","safe","safe","safe","safe","safe",2,3,4,5,6],m:2},
+    {min:75,max:80,v:["safe","safe","safe","safe","safe","safe","safe","safe","safe",3,4,5,5,6],m:2},
+    {min:85,max:90,v:["safe","safe","safe","safe","safe","safe","safe","safe",2,3,5,5,6,"XX"],m:2},
+    {min:95,max:100,v:["safe","safe","safe","safe","safe","safe","safe","safe",2,4,5,6,6,"XX"],m:3}
+  ];
+  function controlRow(speed){if(speed<=0)return{v:Array(14).fill("safe"),m:-3};return CONTROL_ROWS.find(r=>speed>=r.min&&speed<=r.max)||CONTROL_ROWS.at(-1)}
+  function controlTable(speed,hs){const r=controlRow(speed),h=Math.max(-6,Math.min(7,hs));return{result:r.v[CONTROL_STATUSES.indexOf(h)],modifier:r.m}}
   const makeCar = (name,x,y,heading,color,isAI=false) => ({
     name,x,y,heading,color,isAI,speed:20,hc:2,handling:2,accel:5,topSpeed:90,
     armor:{front:20,right:15,left:15,back:15,top:5,under:5},
     ammo:20, weaponDP:3, alive:true, maneuver:null, maneuverD:0, changedSpeed:false,
-    firedThisPhase:false, internal:10
+    firedThisPhase:false, internal:10, pendingCrash:null, crashState:null, firePenalty:0, burning:false, tireDP:{fl:9,fr:9,rl:9,rr:9}
   });
   let player = makeCar("Blue Comet",110,H/2,0,"#4da3ff");
   let ai = makeCar("Red Jackal",W-110,H/2,180,"#ef6262",true);
@@ -96,6 +104,9 @@
     let diff=Math.abs(norm(aim-shooter.heading)); if(diff>180)diff=360-diff;
     return diff<=45;
   }
+  const barriers=[{x:W/2-120,y:H/2-150,w:240,h:18},{x:W/2-120,y:H/2+132,w:240,h:18},{x:W/2-15,y:H/2-65,w:30,h:130}];
+  function hitBarrier(car){return barriers.some(r=>car.x+18>r.x&&car.x-18<r.x+r.w&&car.y+11>r.y&&car.y-11<r.y+r.h)}
+  function barrierCheck(car){if(hitBarrier(car)){car.x-=Math.cos(rad(car.heading))*SCALE*.7;car.y-=Math.sin(rad(car.heading))*SCALE*.7;log(`${car.name} strikes a barrier: D3 hazard.`,"bad");damage(car,roll(1),"front","Barrier");controlCheck(car,3,"hazard")}}
   function collisionWall(car){
     const margin=18;
     return car.x<arena.x+margin||car.x>arena.x+arena.w-margin||car.y<arena.y+margin||car.y>arena.y+arena.h-margin;
@@ -106,28 +117,36 @@
     if(amount>0){target.internal-=amount;log(`${amount} internal damage penetrates!`,"bad");}
     if(target.internal<=0){target.alive=false;log(`${target.name} is destroyed!`,"bad");}
   }
-  function controlCheck(car,d){
-    if(d<=0)return true;
-    car.handling=Math.max(-6,car.handling-d);
-    const c=controlTable(car.speed,car.handling);
-    if(c.safe){log(`${car.name}: D${d}; handling ${car.handling}. Control safe.`);return true}
-    if(c.auto){log(`${car.name}: automatic loss of control!`,"bad"); crash(car); return false}
-    const r=roll(1); log(`${car.name}: control roll ${r}, needs ${c.target}+.`, r>=c.target?"good":"bad");
-    if(r<c.target){crash(car);return false} return true;
+  function controlCheck(car,d,source="maneuver"){
+    if(d<=0)return true;car.handling=Math.max(-6,car.handling-d);const c=controlTable(car.speed,car.handling);
+    if(c.result==="safe"){log(`${car.name}: D${d}; HS ${car.handling}; safe.`);return true}
+    if(c.result==="XX"){log(`${car.name}: automatic loss of control.`,"bad");scheduleCrash(car,d,source,c.modifier);return false}
+    const rr=roll(1);log(`${car.name}: control ${rr}, needs ${c.result}+.` ,rr>=c.result?"good":"bad");if(rr<c.result){scheduleCrash(car,d,source,c.modifier);return false}return true;
   }
-  function crash(car){
-    const r=roll(2)+Math.floor(car.speed/40);
-    const spin=(r>=8?45:15)*(Math.random()<.5?-1:1);
-    car.heading=norm(car.heading+spin);
-    car.speed=Math.max(0,car.speed-(r>=9?20:10));
-    car.handling=-6;
-    damage(car,Math.max(1,Math.floor(r/4)),Math.random()<.5?"left":"right","Crash");
+  function scheduleCrash(car,d,source,sm){const raw=roll(2),total=raw+sm+(d-3);log(`${car.name}: crash ${raw} ${sm>=0?"+":""}${sm} speed ${(d-3)>=0?"+":""}${d-3} difficulty = ${total}.`,"bad");car.pendingCrash={table:source==="hazard"?2:1,result:total,heading:car.heading,difficulty:d}}
+  function tires(car,n){Object.keys(car.tireDP).forEach(k=>car.tireDP[k]=Math.max(0,car.tireDP[k]-(typeof n==="function"?n():n)))}
+  function resolveTable1(car,r,h){
+    if(r<=2){car.crashState={type:"skid",distance:.25,heading:h};car.firePenalty=Math.max(car.firePenalty,3);log("Crash Table 1: trivial skid 1/4\".","warn")}
+    else if(r<=4){car.crashState={type:"skid",distance:.5,heading:h};car.speed=Math.max(0,car.speed-5);car.firePenalty=Math.max(car.firePenalty,6);log("Crash Table 1: minor skid 1/2\", speed -5.","warn")}
+    else if(r<=6){tires(car,1);car.crashState={type:"skid",distance:.75,heading:h,next:.25};car.speed=Math.max(0,car.speed-10);car.firePenalty=99;log("Crash Table 1: moderate skid; tires -1; speed -10.","bad")}
+    else if(r<=8){tires(car,2);car.crashState={type:"skid",distance:1,heading:h,next:.5};car.speed=Math.max(0,car.speed-20);car.firePenalty=99;log("Crash Table 1: severe skid; tires -2; speed -20.","bad")}
+    else if(r<=10){tires(car,()=>roll(1));car.crashState={type:"spin",heading:h,dir:Math.random()<.5?-1:1};car.handling=-6;car.firePenalty=99;log("Crash Table 1: spinout.","bad")}
+    else if(r<=14){car.crashState={type:"roll",heading:h,stage:0};car.burning=r>=13&&roll(1)>=4;car.handling=-6;car.firePenalty=99;log(`Crash Table 1: rollover${car.burning?" and burning":""}.`,"bad")}
+    else{tires(car,()=>roll(3));car.crashState={type:"vault",heading:h,remaining:roll(1),stage:0};car.handling=-6;car.firePenalty=99;log("Crash Table 1: vault.","bad")}
   }
+  function resolveTable2(car,r,p){const dir=Math.random()<.5?-1:1;if(r<=4){car.heading=norm(car.heading+dir*15);car.firePenalty=Math.max(car.firePenalty,3);log("Crash Table 2: minor fishtail.","warn")}else if(r<=8){car.heading=norm(car.heading+dir*30);car.firePenalty=Math.max(car.firePenalty,6);log("Crash Table 2: major fishtail.","bad")}else{car.heading=norm(car.heading+dir*(r<=10?15:r<=14?30:45));log("Crash Table 2: fishtail then Crash Table 1.","bad");const row=controlRow(car.speed),raw=roll(2);resolveTable1(car,raw+row.m+(p.difficulty-3),p.heading)}}
+  function applyCrash(car){if(!car.pendingCrash)return;const p=car.pendingCrash;car.pendingCrash=null;p.table===2?resolveTable2(car,p.result,p):resolveTable1(car,p.result,p.heading)}
+  function crashMove(car,inches){applyCrash(car);const c=car.crashState;if(!c)return false;if(c.type==="skid"){const d=Math.min(inches,c.distance);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;const rest=Math.max(0,inches-d);car.x+=Math.cos(rad(car.heading))*rest*SCALE;car.y+=Math.sin(rad(car.heading))*rest*SCALE;c.distance-=d;if(c.distance<=0)car.crashState=c.next?{type:"skid",distance:c.next,heading:c.heading}:null}
+    else if(c.type==="spin"){car.x+=Math.cos(rad(c.heading))*inches*SCALE;car.y+=Math.sin(rad(c.heading))*inches*SCALE;car.heading=norm(car.heading+90*c.dir)}
+    else if(c.type==="roll"){car.x+=Math.cos(rad(c.heading))*Math.min(1,inches)*SCALE;car.y+=Math.sin(rad(c.heading))*Math.min(1,inches)*SCALE;const side=["right","top","left","under"][c.stage%4];side==="under"?tires(car,()=>roll(1)):damage(car,roll(1),side,"Rollover");c.stage++;car.heading=norm(car.heading+90)}
+    else if(c.type==="vault"){const d=Math.min(inches,c.remaining);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;c.remaining-=d;car.heading=norm(car.heading+180);if(c.remaining<=0){damage(car,roll(Math.max(1,Math.floor(car.speed/10))),["front","right","back","left","top","under"][Math.floor(Math.random()*6)],"Vault landing");car.crashState={type:"roll",heading:c.heading,stage:0}}}return true}
+  function crash(car){scheduleCrash(car,3,"maneuver",controlRow(car.speed).m)}
   function performMove(car,mv){
     const inches=moveDist(car);
     if(inches<=0)return;
+    if(crashMove(car,inches)){barrierCheck(car);return;}
     let d=mv?.d||0;
-    if(!controlCheck(car,d)) return;
+    if(!controlCheck(car,d,"maneuver")) return;
     if(mv?.type==="bendL")car.heading=norm(car.heading-15);
     if(mv?.type==="bendR")car.heading=norm(car.heading+15);
     let lateral=0;
@@ -135,6 +154,7 @@
     if(mv?.type==="driftR")lateral=0.25*SCALE;
     car.x += Math.cos(rad(car.heading))*inches*SCALE + Math.cos(rad(car.heading+90))*lateral;
     car.y += Math.sin(rad(car.heading))*inches*SCALE + Math.sin(rad(car.heading+90))*lateral;
+    barrierCheck(car);
     if(collisionWall(car)){
       car.x=Math.min(Math.max(car.x,arena.x+19),arena.x+arena.w-19);
       car.y=Math.min(Math.max(car.y,arena.y+19),arena.y+arena.h-19);
@@ -155,14 +175,14 @@
     const range=dist(shooter,target)/SCALE;
     const rangeMod=range<=4?1:range<=12?0:range<=20?-1:-3;
     const moveMod=target.speed>=50?-2:target.speed>=20?-1:0;
-    const maneuverMod=-(shooter.maneuverD||0);
-    const targetNum=Math.max(3,7-rangeMod-moveMod-maneuverMod);
+    const maneuverMod=-(shooter.maneuverD||0);if(shooter.firePenalty>=99){log(`${shooter.name}: aimed fire prohibited after loss of control.`,"bad");return false}const crashMod=-(shooter.firePenalty||0);
+    const targetNum=Math.max(3,7-rangeMod-moveMod-maneuverMod-crashMod);
     const r=roll(2); shooter.ammo--; shooter.firedThisPhase=true;
     log(`${shooter.name} fires: roll ${r}, needs ${targetNum}+ (range ${range.toFixed(1)}").`,r>=targetNum?"good":"bad");
     if(r>=targetNum){
       const dmg=roll(1); const side=sideHit(target,shooter);
       log(`Hit! ${dmg} damage to ${target.name}'s ${side}.`,"good"); damage(target,dmg,side,"Machine gun");
-      controlCheck(target,dmg>=6?2:1);
+      controlCheck(target,dmg>=10?3:dmg>=6?2:1,"hazard");
     }
     return true;
   }
@@ -206,6 +226,7 @@
     if(phase===5){
       player.handling=Math.min(player.hc,player.handling+Math.max(1,player.hc));
       ai.handling=Math.min(ai.hc,ai.handling+Math.max(1,ai.hc));
+      [player,ai].forEach(c=>{if(c.crashState&&["spin","roll"].includes(c.crashState.type))c.speed=Math.max(0,c.speed-20);c.firePenalty=0;});
       turn++;phase=1;player.changedSpeed=ai.changedSpeed=false;
       log(`— Turn ${turn} begins. Handling recovered. —`,"warn");
     } else phase++;
@@ -269,5 +290,9 @@
   $("accel").onclick=()=>{if(!player.changedSpeed){player.speed=Math.min(player.topSpeed,player.speed+player.accel);player.changedSpeed=true;log(`${player.name} accelerates to ${player.speed} mph.`);updateUI();draw()}};
   $("brake").onclick=()=>{if(!player.changedSpeed){player.speed=Math.max(0,player.speed-5);player.changedSpeed=true;log(`${player.name} decelerates to ${player.speed} mph.`);updateUI();draw()}};
   $("fire").onclick=()=>{fire(player,ai);updateUI();draw();checkEnd()};
+
+  function toggleHotkeys(show){const o=$("hotkeyOverlay");if(!o)return;o.style.display=(show===undefined?(o.style.display==="none"?"flex":"none"):(show?"flex":"none"))}
+  document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w")$("accel").click();else if(k==="arrowdown"||k==="x")$("brake").click();else if(k==="arrowleft"||k==="q")$("left15").click();else if(k==="arrowright"||k==="e")$("right15").click();else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
+  if($("closeHotkeys"))$("closeHotkeys").onclick=()=>toggleHotkeys(false);
   updateUI();draw();
 })();
