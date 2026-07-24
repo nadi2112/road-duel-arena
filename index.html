@@ -1,5 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.3.0</title><link rel="stylesheet" href="styles.css"></head><body>
-<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.3.0 Garage</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.3.1</title><link rel="stylesheet" href="styles.css"></head><body>
+<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.3.1 Garage</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
 <main>
 <section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.2 adds a rules-driven vehicle garage, saved designs, live validation, and arena vehicle selection.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
 
@@ -33,7 +33,7 @@
 
   <section id="gameWrap">
     <canvas id="game" width="1050" height="700"></canvas>
-    <div id="toast"></div><div class="overlay" id="hotkeyOverlay" style="display:none"><div class="card hotkeyCard"><h2>Keyboard Quick Reference</h2><div class="hotkeyGrid"><kbd>↑ / W</kbd><span>Accelerate</span><kbd>↓ / X</kbd><span>Brake</span><kbd>← / Q</kbd><span>Bend left</span><kbd>→ / E</kbd><span>Bend right</span><kbd>A</kbd><span>Drift left</span><kbd>D</kbd><span>Drift right</span><kbd>S</kbd><span>Straight</span><kbd>F</kbd><span>Fire</span><kbd>Space / Enter</kbd><span>Commit phase</span><kbd>H / ?</kbd><span>Help</span><kbd>Esc</kbd><span>Close / straight</span></div><button id="closeHotkeys" class="primary">Return to Duel</button></div></div>
+    <div id="toast"></div><div class="overlay" id="hotkeyOverlay" style="display:none"><div class="card hotkeyCard"><h2>Keyboard Quick Reference</h2><div class="hotkeyGrid"><kbd>↑ / W</kbd><span>Accelerate</span><kbd>↓ / X</kbd><span>Brake</span><kbd>← / Q</kbd><span>Bend left</span><kbd>→ / E</kbd><span>Bend right</span><kbd>A</kbd><span>Drift left</span><kbd>D</kbd><span>Drift right</span><kbd>S</kbd><span>Straight</span><kbd>V</kbd><span>Forward / reverse gear</span><kbd>F</kbd><span>Fire</span><kbd>Space / Enter</kbd><span>Commit phase</span><kbd>H / ?</kbd><span>Help</span><kbd>Esc</kbd><span>Close / straight</span></div><button id="closeHotkeys" class="primary">Return to Duel</button></div></div>
     <div class="overlay" id="startOverlay">
       <div class="card">
         <h2>Amateur Arena Duel</h2>
@@ -68,6 +68,7 @@
       <div class="controls">
         <button id="accel">Accelerate +5</button>
         <button id="brake">Brake −5</button>
+        <button id="reverse" class="wide">Select Reverse Gear</button>
         <button id="left15">Bend Left 15°</button>
         <button id="right15">Bend Right 15°</button>
         <button id="driftL">Drift Left</button>
