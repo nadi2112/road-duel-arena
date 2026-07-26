@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.0
+- Added deterministic replay recording and JSON export/import.
+- Added replay timeline, stepping, and playback.
+- Added camera zoom, pan, fit, center, and follow controls.
+- Added fixed combat workspace and developer inspector.
+- Added categorized, turn/phase-stamped combat log.
+
+# Changelog
+
 ## v0.3.3 — Rollover Refinement
 
 - Rollover results now begin with an immediate 90-degree T-stop, placing the vehicle broadside to its original path.

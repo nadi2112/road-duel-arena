@@ -1,5 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.3.3</title><link rel="stylesheet" href="styles.css"></head><body>
-<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.3.3 Garage</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.4.0</title><link rel="stylesheet" href="styles.css"></head><body>
+<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.4.0 Replay & Camera</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
 <main>
 <section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.2 adds a rules-driven vehicle garage, saved designs, live validation, and arena vehicle selection.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
 
@@ -27,11 +27,11 @@
 <div class="panel"><h3>AI Vehicle</h3><select id="aiVehicle"></select><div id="aiPreview" class="vehiclePreview"></div></div>
 <div class="panel"><h3>Duel</h3><label>Starting speed<select id="startSpeed"><option>10</option><option selected>20</option><option>30</option><option>40</option></select></label><button id="launchArena" class="primary wide">Launch Arena</button><p class="hint">Combat, crashes, wall impacts, and barriers remain the v0.1 prototype.</p></div>
 </div></section>
-<section id="arena" class="screen">
+<section id="arena" class="screen arenaScreen">
 
 
 
-  <section id="gameWrap">
+  <section class="arenaViewport"><div class="cameraToolbar"><button id="zoomOut">−</button><button id="zoomIn">+</button><button id="fitArena">Fit Arena</button><button id="centerPlayer">Center Car</button><button id="followPlayer">Follow: Off</button><span id="zoomLabel">100%</span></div><section id="gameWrap">
     <canvas id="game" width="1050" height="700"></canvas>
     <div id="toast"></div><div class="overlay" id="hotkeyOverlay" style="display:none"><div class="card hotkeyCard"><h2>Keyboard Quick Reference</h2><div class="hotkeyGrid"><kbd>↑ / W</kbd><span>Accelerate</span><kbd>↓ / X</kbd><span>Brake</span><kbd>← / Q</kbd><span>Bend left</span><kbd>→ / E</kbd><span>Bend right</span><kbd>A</kbd><span>Drift left</span><kbd>D</kbd><span>Drift right</span><kbd>S</kbd><span>Straight</span><kbd>V</kbd><span>Forward / reverse gear</span><kbd>F</kbd><span>Fire</span><kbd>Space / Enter</kbd><span>Commit phase</span><kbd>H / ?</kbd><span>Help</span><kbd>Esc</kbd><span>Close / straight</span></div><button id="closeHotkeys" class="primary">Return to Duel</button></div></div>
     <div class="overlay" id="startOverlay">
@@ -49,7 +49,7 @@
         <button class="primary" onclick="location.reload()">Play Again</button>
       </div>
     </div>
-  </section>
+  </section></section>
 
   <aside class="sidebar">
     <section class="panel">
@@ -97,7 +97,24 @@
     </section>
 
     <section class="panel">
-      <h3>Combat Log</h3>
+      <div class="panelTitleRow"><h3>Replay</h3><span id="replayPosition" class="tiny">Live</span></div>
+      <div class="controls replayControls">
+        <button id="replayStart">|◀</button><button id="replayBack">◀</button>
+        <button id="replayPlay">Play</button><button id="replayForward">▶</button>
+        <button id="exportReplay" class="wide">Export Replay</button>
+        <label class="fileButton wide">Import Replay<input id="importReplay" type="file" accept="application/json,.json"></label>
+      </div>
+      <input id="replaySlider" type="range" min="0" max="0" value="0">
+    </section>
+
+    <section class="panel">
+      <h3>Developer Inspector</h3>
+      <select id="inspectCar"><option value="player">Player vehicle</option><option value="ai">AI vehicle</option></select>
+      <div id="inspector" class="inspector"></div>
+    </section>
+
+    <section class="panel logPanel">
+      <div class="panelTitleRow"><h3>Combat Log</h3><select id="logFilter"><option value="all">All</option><option value="movement">Movement</option><option value="combat">Combat</option><option value="control">Control</option><option value="crash">Crash</option><option value="damage">Damage</option><option value="ai">AI</option></select></div>
       <div id="log"></div>
     </section>
   </aside>

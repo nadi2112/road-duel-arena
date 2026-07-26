@@ -83,12 +83,18 @@
     }
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,label:"Go straight"}, locked=false;
+  let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
+  let replay={version:"0.4.0",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
+  function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
 
   const $ = id => document.getElementById(id);
   const logEl=$("log");
-  function log(msg, cls=""){ const d=document.createElement("div"); d.className=cls; d.textContent=msg; logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight; }
+  function inferCategory(msg,cls){if(cls==="crash"||/crash|skid|spin|roll|vault|loss of control/i.test(msg))return "crash";if(/damage|armor|destroy|hit!/i.test(msg))return "damage";if(/control|handling|D\d/i.test(msg))return "control";if(/fire|weapon|target|ammo/i.test(msg))return "combat";if(/AI|Red Jackal/i.test(msg))return "ai";return "movement"}
+  function log(msg, cls="", category){ const d=document.createElement("div"); d.className=cls;d.dataset.category=category||inferCategory(msg,cls);d.dataset.turn=turn;d.dataset.phase=phase; d.textContent=`[T${turn} P${phase}] ${msg}`; logEl.appendChild(d); replay.events.push({turn,phase,msg,cls,category:d.dataset.category});applyLogFilter();logEl.scrollTop=logEl.scrollHeight; }
+  function applyLogFilter(){const f=$("logFilter")?.value||"all";logEl.querySelectorAll("div[data-category]").forEach(d=>d.style.display=(f==="all"||d.dataset.category===f)?"block":"none")}
   function toast(msg){ const t=$("toast"); t.textContent=msg;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,1500); }
-  function roll(n=2){let s=0;for(let i=0;i<n;i++)s+=1+Math.floor(Math.random()*6);return s}
+  function roll(n=2){let s=0;for(let i=0;i<n;i++)s+=1+Math.floor(random()*6);return s}
   function norm(a){return (a%360+360)%360}
   function rad(a){return a*Math.PI/180}
   function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
@@ -161,9 +167,9 @@
     else if(r<=4){car.crashState={type:"skid",distance:.5,heading:h};car.speed=Math.max(0,car.speed-5);car.firePenalty=Math.max(car.firePenalty,6);log("Crash Table 1: minor skid 1/2\", speed -5.","warn")}
     else if(r<=6){tires(car,1);car.crashState={type:"skid",distance:.75,heading:h,next:.25};car.speed=Math.max(0,car.speed-10);car.firePenalty=99;log("Crash Table 1: moderate skid; tires -1; speed -10.","bad")}
     else if(r<=8){tires(car,2);car.crashState={type:"skid",distance:1,heading:h,next:.5};car.speed=Math.max(0,car.speed-20);car.firePenalty=99;log("Crash Table 1: severe skid; tires -2; speed -20.","bad")}
-    else if(r<=10){tires(car,()=>roll(1));car.crashState={type:"spin",heading:h,dir:Math.random()<.5?-1:1};car.handling=-6;car.firePenalty=99;log("Crash Table 1: spinout.","bad")}
+    else if(r<=10){tires(car,()=>roll(1));car.crashState={type:"spin",heading:h,dir:random()<.5?-1:1};car.handling=-6;car.firePenalty=99;log("Crash Table 1: spinout.","bad")}
     else if(r<=14){
-      const rollDir=Math.random()<.5?-1:1;
+      const rollDir=random()<.5?-1:1;
       const bodyHeading=norm(h+rollDir*90);
       car.heading=bodyHeading;
       car.crashState={type:"roll",heading:h,bodyHeading,rollDir,stage:0,face:"under",tstop:true};
@@ -174,7 +180,7 @@
     else{tires(car,()=>roll(3));car.crashState={type:"vault",heading:h,remaining:roll(1),stage:0};car.handling=-6;car.firePenalty=99;log("Crash Table 1: vault.","bad")}
     if(car.speed===0)endCrashAtHalt(car);
   }
-  function resolveTable2(car,r,p){const dir=Math.random()<.5?-1:1;if(r<=4){car.heading=norm(car.heading+dir*15);car.firePenalty=Math.max(car.firePenalty,3);log("Crash Table 2: minor fishtail.","warn")}else if(r<=8){car.heading=norm(car.heading+dir*30);car.firePenalty=Math.max(car.firePenalty,6);log("Crash Table 2: major fishtail.","bad")}else{car.heading=norm(car.heading+dir*(r<=10?15:r<=14?30:45));log("Crash Table 2: fishtail then Crash Table 1.","bad");const row=controlRow(car.speed),raw=roll(2);resolveTable1(car,raw+row.m+(p.difficulty-3),p.heading)}}
+  function resolveTable2(car,r,p){const dir=random()<.5?-1:1;if(r<=4){car.heading=norm(car.heading+dir*15);car.firePenalty=Math.max(car.firePenalty,3);log("Crash Table 2: minor fishtail.","warn")}else if(r<=8){car.heading=norm(car.heading+dir*30);car.firePenalty=Math.max(car.firePenalty,6);log("Crash Table 2: major fishtail.","bad")}else{car.heading=norm(car.heading+dir*(r<=10?15:r<=14?30:45));log("Crash Table 2: fishtail then Crash Table 1.","bad");const row=controlRow(car.speed),raw=roll(2);resolveTable1(car,raw+row.m+(p.difficulty-3),p.heading)}}
   function applyCrash(car){if(!car.pendingCrash)return;const p=car.pendingCrash;car.pendingCrash=null;p.table===2?resolveTable2(car,p.result,p):resolveTable1(car,p.result,p.heading)}
   function angleDifference(a,b){let d=Math.abs(norm(a-b));return d>180?360-d:d}
   function endCrashAtHalt(car){
@@ -207,7 +213,7 @@
       else damage(car,roll(1),c.face,"Rollover");
       log(`${car.name} rollover impact: ${c.face}.`,"crash");
     } else if(c.type==="vault"){
-      const d=Math.min(inches,c.remaining);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;c.remaining-=d;car.heading=norm(car.heading+180);if(c.remaining<=0){damage(car,roll(Math.max(1,Math.floor(car.speed/10))),["front","right","back","left","top","under"][Math.floor(Math.random()*6)],"Vault landing");car.crashState={type:"roll",heading:c.heading,bodyHeading:norm(c.heading+90),rollDir:1,stage:0,face:"under",tstop:false}}
+      const d=Math.min(inches,c.remaining);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;c.remaining-=d;car.heading=norm(car.heading+180);if(c.remaining<=0){damage(car,roll(Math.max(1,Math.floor(car.speed/10))),["front","right","back","left","top","under"][Math.floor(random()*6)],"Vault landing");car.crashState={type:"roll",heading:c.heading,bodyHeading:norm(c.heading+90),rollDir:1,stage:0,face:"under",tstop:false}}
     }
     car.crashTrail.push({x1:previous.x,y1:previous.y,x2:car.x,y2:car.y});
     if(car.crashTrail.length>30)car.crashTrail.shift();
@@ -273,9 +279,17 @@
   }
   function aiAct(){
     const mv=aiChoice(); ai.maneuverD=mv.d; performMove(ai,mv);
-    if(ai.alive && player.alive && inArc(ai,player) && Math.random()<.75)fire(ai,player);
+    if(ai.alive && player.alive && inArc(ai,player) && random()<.75)fire(ai,player);
   }
-  function setSelected(type,d,label){selected={type,d,label};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}.`;draw()}
+  function clone(v){return JSON.parse(JSON.stringify(v))}
+  function snapshot(label="Phase resolved"){const frame={turn,phase,label,rngState,player:clone(player),ai:clone(ai),events:replay.events.length};replay.frames.push(frame);replayIndex=replay.frames.length-1;updateReplayUI()}
+  function restoreFrame(i){if(!replay.frames.length)return;replayMode=true;replayIndex=Math.max(0,Math.min(i,replay.frames.length-1));const f=replay.frames[replayIndex];player=clone(f.player);ai=clone(f.ai);turn=f.turn;phase=f.phase;rngState=f.rngState||rngState;updateUI();draw();updateReplayUI()}
+  function updateReplayUI(){if(!$("replaySlider"))return;$("replaySlider").max=Math.max(0,replay.frames.length-1);$("replaySlider").value=Math.max(0,replayIndex);$("replayPosition").textContent=replayMode?`Frame ${replayIndex+1}/${replay.frames.length}`:`Live · ${replay.frames.length} frames`}
+  function exportReplay(){const payload={...replay,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`road-duel-replay-T${turn}-P${phase}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),500)}
+  function importReplayFile(file){const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!Array.isArray(data.frames)||!data.frames.length)throw new Error("No replay frames");replay=data;rngSeed=data.seed||1;rngState=rngSeed;locked=true;restoreFrame(0);log("Imported replay loaded. Use replay controls to inspect it.","warn","movement")}catch(e){toast(`Replay import failed: ${e.message}`)}};reader.readAsText(file)}
+  function stopReplay(){if(replayTimer){clearInterval(replayTimer);replayTimer=null}if($("replayPlay"))$("replayPlay").textContent="Play"}
+  function toggleReplayPlay(){if(replayTimer){stopReplay();return}if(!replay.frames.length)return;$("replayPlay").textContent="Pause";replayTimer=setInterval(()=>{if(replayIndex>=replay.frames.length-1){stopReplay();return}restoreFrame(replayIndex+1)},500)}
+  function setSelected(type,d,label){if(replayMode)return;selected={type,d,label};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}.`;draw()}
   function updateUI(){
     $("turnNum").textContent=turn;$("phaseNum").textContent=phase;$("speed").textContent=`${player.direction<0?"R ":""}${player.speed}`;$("handling").textContent=player.handling;
     $("ammo").textContent=player.ammo;$("weaponDP").textContent=player.weaponDP;
@@ -284,8 +298,11 @@
     $("accel").disabled=player.changedSpeed||player.speed>=player.topSpeed;
     $("brake").disabled=player.changedSpeed||player.speed<=0;
     if($("reverse")){$("reverse").disabled=player.speed!==0||player.stoppedTurns<1;$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
-    $("fire").disabled=player.firedThisPhase||player.ammo<=0||!player.alive;
+    $("fire").disabled=replayMode||player.firedThisPhase||player.ammo<=0||!player.alive;
+    ["accel","brake","reverse","left15","right15","driftL","driftR","straight","commit"].forEach(id=>{if($(id)&&replayMode)$(id).disabled=true});
+    updateInspector();updateReplayUI();
   }
+  function updateInspector(){if(!$("inspector"))return;const car=$("inspectCar")?.value==="ai"?ai:player;const travel=movementHeading(car);const crash=car.crashState?`${car.crashState.type}${car.crashState.face?` / ${car.crashState.face}`:""}`:"normal";const values={Position:`${car.x.toFixed(1)}, ${car.y.toFixed(1)}`,Speed:`${car.speed} mph`,Heading:`${norm(car.heading).toFixed(0)}°`,Momentum:`${travel.toFixed(0)}°`,Handling:car.handling,HC:car.hc,"Crash state":crash,Internal:car.internal,Direction:car.direction<0?"reverse":"forward",RNG:rngState};$("inspector").innerHTML=Object.entries(values).map(([k,v])=>`<div><b>${k}</b>${v}</div>`).join("")}
   function checkEnd(){
     if(!player.alive||!ai.alive){
       locked=true;$("endOverlay").style.display="flex";
@@ -320,7 +337,7 @@
     player.firedThisPhase=ai.firedThisPhase=false;
     selected={type:"straight",d:0,label:"Go straight"};
     $("previewText").textContent="Choose a maneuver, then commit it.";
-    updateUI();draw();checkEnd();
+    snapshot("Movement resolved");updateUI();draw();checkEnd();
   }
   function drawArena(){
     ctx.fillStyle="#11161c";ctx.fillRect(0,0,W,H);
@@ -403,8 +420,11 @@
     ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle="#f2b84b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(player.x,player.y);ctx.lineTo(x,y);ctx.stroke();
     ctx.translate(x,y);ctx.rotate(rad(h));ctx.strokeRect(-18,-10,36,20);ctx.restore();
   }
-  function draw(){drawArena();drawCrashTrail(player);drawCrashTrail(ai);drawArc(player);drawPreview();drawCar(player);drawCar(ai)}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");updateUI();draw()}
+  function draw(){ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,W,H);ctx.save();ctx.translate(camera.x,camera.y);ctx.scale(camera.zoom,camera.zoom);drawArena();drawCrashTrail(player);drawCrashTrail(ai);drawArc(player);drawPreview();drawCar(player);drawCar(ai);ctx.restore();if(camera.follow&&!replayMode)centerOn(player,false);if($("zoomLabel"))$("zoomLabel").textContent=`${Math.round(camera.zoom*100)}%`;updateInspector()}
+  function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
+  function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
+  function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.0",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
   $("left15").onclick=()=>setSelected("bendL",1,"15° left bend");
   $("right15").onclick=()=>setSelected("bendR",1,"15° right bend");
   $("driftL").onclick=()=>setSelected("driftL",1,"left drift");
@@ -420,8 +440,19 @@
   };
   $("fire").onclick=()=>{fire(player,ai);updateUI();draw();checkEnd()};
 
+  if($("zoomIn"))$("zoomIn").onclick=()=>setZoom(camera.zoom*1.2);
+  if($("zoomOut"))$("zoomOut").onclick=()=>setZoom(camera.zoom/1.2);
+  if($("fitArena"))$("fitArena").onclick=fitArena;
+  if($("centerPlayer"))$("centerPlayer").onclick=()=>centerOn(player);
+  if($("followPlayer"))$("followPlayer").onclick=()=>{camera.follow=!camera.follow;$("followPlayer").textContent=`Follow: ${camera.follow?"On":"Off"}`;if(camera.follow)centerOn(player)};
+  canvas.addEventListener("wheel",e=>{e.preventDefault();const r=canvas.getBoundingClientRect();setZoom(camera.zoom*(e.deltaY<0?1.12:.89),(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height)},{passive:false});
+  canvas.addEventListener("pointerdown",e=>{camera.dragging=true;camera.lastX=e.clientX;camera.lastY=e.clientY;camera.follow=false;if($("followPlayer"))$("followPlayer").textContent="Follow: Off";canvas.classList.add("dragging");canvas.setPointerCapture(e.pointerId)});
+  canvas.addEventListener("pointermove",e=>{if(!camera.dragging)return;const r=canvas.getBoundingClientRect();camera.x+=(e.clientX-camera.lastX)*W/r.width;camera.y+=(e.clientY-camera.lastY)*H/r.height;camera.lastX=e.clientX;camera.lastY=e.clientY;draw()});
+  canvas.addEventListener("pointerup",e=>{camera.dragging=false;canvas.classList.remove("dragging");try{canvas.releasePointerCapture(e.pointerId)}catch{}});
+  if($("logFilter"))$("logFilter").onchange=applyLogFilter;if($("inspectCar"))$("inspectCar").onchange=updateInspector;
+  if($("replayStart"))$("replayStart").onclick=()=>{stopReplay();restoreFrame(0)};if($("replayBack"))$("replayBack").onclick=()=>{stopReplay();restoreFrame(replayIndex-1)};if($("replayForward"))$("replayForward").onclick=()=>{stopReplay();restoreFrame(replayIndex+1)};if($("replayPlay"))$("replayPlay").onclick=toggleReplayPlay;if($("replaySlider"))$("replaySlider").oninput=e=>{stopReplay();restoreFrame(Number(e.target.value))};if($("exportReplay"))$("exportReplay").onclick=exportReplay;if($("importReplay"))$("importReplay").onchange=e=>{if(e.target.files[0])importReplayFile(e.target.files[0])};
   function toggleHotkeys(show){const o=$("hotkeyOverlay");if(!o)return;o.style.display=(show===undefined?(o.style.display==="none"?"flex":"none"):(show?"flex":"none"))}
   document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w")$("accel").click();else if(k==="arrowdown"||k==="x")$("brake").click();else if(k==="arrowleft"||k==="q")$("left15").click();else if(k==="arrowright"||k==="e")$("right15").click();else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="v"&&$("reverse"))$("reverse").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
   if($("closeHotkeys"))$("closeHotkeys").onclick=()=>toggleHotkeys(false);
-  updateUI();draw();
+  updateUI();fitArena();draw();
 })();
