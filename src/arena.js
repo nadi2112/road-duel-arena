@@ -61,7 +61,7 @@
     armor:{front:20,right:15,left:15,back:15,top:5,under:5},
     ammo:20, weaponDP:3, alive:true, maneuver:null, maneuverD:0, changedSpeed:false,
     firedThisPhase:false, internal:10, pendingCrash:null, crashState:null, firePenalty:0, burning:false,
-    tireDP:{fl:9,fr:9,rl:9,rr:9}, direction:1, stoppedTurns:0
+    tireDP:{fl:9,fr:9,rl:9,rr:9}, direction:1, stoppedTurns:0, crashTrail:[], crashBannerUntil:0, crashMomentumHeading:null
   });
   let player = makeCar("Blue Comet",110,H/2,0,"#4da3ff");
   let ai = makeCar("Red Jackal",W-110,H/2,180,"#ef6262",true);
@@ -150,7 +150,9 @@
   function scheduleCrash(car,d,source,sm){
     const raw=roll(2),total=raw+sm+(d-3);
     log(`${car.name}: crash ${raw} ${sm>=0?"+":""}${sm} speed ${(d-3)>=0?"+":""}${d-3} difficulty = ${total}.`,"bad");
-    car.pendingCrash={table:source==="hazard"?2:1,result:total,heading:movementHeading(car),difficulty:d};
+    car.pendingCrash={table:source==="hazard"?2:1,result:total,heading:car.crashMomentumHeading ?? movementHeading(car),difficulty:d};
+    car.crashBannerUntil=performance.now()+1200;
+    log(`⚠ LOSS OF CONTROL — ${car.name}` ,"crash");
     applyCrash(car); // Crash result is established in the phase control is lost.
   }
   function tires(car,n){Object.keys(car.tireDP).forEach(k=>car.tireDP[k]=Math.max(0,car.tireDP[k]-(typeof n==="function"?n():n)))}
@@ -172,27 +174,8 @@
     if(car.crashState.type==="spin")log(`${car.name}'s spinout ends at 0 mph.`,"good");
     car.crashState=null; car.pendingCrash=null; car.direction=1;
   }
-  function attemptSpinRecovery(car){
-    const c=car.crashState;
-    if(!c||c.type!=="spin"||car.speed<=0)return false;
-    const need=controlTable(car.speed,-6).result;
-    if(need==="XX"){log(`${car.name}: automatic spinout recovery attempt at HC -6 — impossible at this speed.`,"bad");return false}
-    if(need==="safe"){log(`${car.name}: automatic spinout recovery at HC -6 — safe.`,"good")}
-    else{
-      const r=roll(1),ok=r>=need;
-      log(`${car.name}: automatic spinout recovery at HC -6: rolled ${r}, needs ${need}+ — ${ok?"recovered":"failed"}.`,ok?"good":"bad");
-      if(!ok)return false;
-    }
-    const delta=angleDifference(car.heading,c.heading);
-    car.crashState=null;
-    if(delta<=45){car.direction=1;log(`${car.name} recovers facing the direction of travel; normal movement resumes.`,"good")}
-    else if(delta>=135){car.direction=-1;log(`${car.name} recovers facing backward and continues backward.`,"warn")}
-    else{car.crashState={type:"tstop",heading:c.heading};log(`${car.name} recovers sideways; an immediate T-stop begins.`,"warn")}
-    return true;
-  }
   function crashMove(car,inches){
     applyCrash(car);
-    if(car.crashState?.type==="spin")attemptSpinRecovery(car);
     const c=car.crashState;if(!c)return false;
     const previous={x:car.x,y:car.y};
     if(c.type==="skid"){
@@ -205,10 +188,13 @@
       const d=Math.min(1,inches);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;
       car.speed=Math.max(0,car.speed-20*d);if(car.speed===0)endCrashAtHalt(car)
     } else if(c.type==="roll"){
-      car.x+=Math.cos(rad(c.heading))*Math.min(1,inches)*SCALE;car.y+=Math.sin(rad(c.heading))*Math.min(1,inches)*SCALE;const side=["right","top","left","under"][c.stage%4];side==="under"?tires(car,()=>roll(1)):damage(car,roll(1),side,"Rollover");c.stage++;car.heading=norm(car.heading+90)
+      car.x+=Math.cos(rad(c.heading))*Math.min(1,inches)*SCALE;car.y+=Math.sin(rad(c.heading))*Math.min(1,inches)*SCALE;
+      const side=["right","top","left","under"][c.stage%4];side==="under"?tires(car,()=>roll(1)):damage(car,roll(1),side,"Rollover");c.stage++
     } else if(c.type==="vault"){
       const d=Math.min(inches,c.remaining);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;c.remaining-=d;car.heading=norm(car.heading+180);if(c.remaining<=0){damage(car,roll(Math.max(1,Math.floor(car.speed/10))),["front","right","back","left","top","under"][Math.floor(Math.random()*6)],"Vault landing");car.crashState={type:"roll",heading:c.heading,stage:0}}
     }
+    car.crashTrail.push({x1:previous.x,y1:previous.y,x2:car.x,y2:car.y});
+    if(car.crashTrail.length>30)car.crashTrail.shift();
     resolveSolidCollisions(car,previous,true);
     return true
   }
@@ -219,13 +205,17 @@
     if(car.speed===0){endCrashAtHalt(car);return}
     if(crashMove(car,inches))return;
     let d=(mv?.d||0)+(car.direction<0&&mv?.d?1:0);
-    if(!controlCheck(car,d,"maneuver")){
-      // The first crash-table movement occurs immediately in this phase.
-      crashMove(car,inches);
-      return;
-    }
+    const originalTravel=movementHeading(car);
     if(mv?.type==="bendL")car.heading=norm(car.heading-(car.direction<0?-15:15));
     if(mv?.type==="bendR")car.heading=norm(car.heading+(car.direction<0?-15:15));
+    car.crashMomentumHeading=originalTravel;
+    if(!controlCheck(car,d,"maneuver")){
+      // Steering changes the body heading, while the crash skid preserves pre-bend momentum.
+      crashMove(car,inches);
+      car.crashMomentumHeading=null;
+      return;
+    }
+    car.crashMomentumHeading=null;
     let lateral=0;
     if(mv?.type==="driftL")lateral=-0.25*SCALE;
     if(mv?.type==="driftR")lateral=0.25*SCALE;
@@ -338,17 +328,32 @@
     ctx.save();ctx.translate(car.x,car.y);ctx.rotate(rad(car.heading));
     ctx.fillStyle="#f3c76322";ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,220,-Math.PI/4,Math.PI/4);ctx.closePath();ctx.fill();ctx.restore();
   }
+  function drawCrashTrail(car){
+    if(!car.crashTrail?.length)return;
+    ctx.save();ctx.strokeStyle="#ff4d5f";ctx.lineWidth=3;ctx.setLineDash([9,6]);ctx.globalAlpha=.75;
+    car.crashTrail.forEach(t=>{ctx.beginPath();ctx.moveTo(t.x1,t.y1);ctx.lineTo(t.x2,t.y2);ctx.stroke()});ctx.restore();
+  }
   function drawCar(car){
     if(!car.alive)return;
+    const crashing=!!car.crashState, rollStage=car.crashState?.type==="roll"?(car.crashState.stage%4):null;
     ctx.save();ctx.translate(car.x,car.y);ctx.rotate(rad(car.heading));
-    ctx.shadowColor="#000";ctx.shadowBlur=8;
-    ctx.fillStyle=car.color;ctx.strokeStyle="#e9eef5";ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.roundRect(-18,-10,36,20,5);ctx.fill();ctx.stroke();
-    ctx.fillStyle="#17202a";ctx.fillRect(-4,-8,10,16);
-    ctx.fillStyle="#dce6f1";ctx.fillRect(12,-5,5,10);
-    ctx.fillStyle="#0d1117";ctx.fillRect(-13,-12,8,3);ctx.fillRect(6,-12,8,3);ctx.fillRect(-13,9,8,3);ctx.fillRect(6,9,8,3);
+    ctx.shadowColor=crashing?"#ff3448":"#000";ctx.shadowBlur=crashing?18:8;
+    let w=36,h=20;
+    if(rollStage===0||rollStage===2)h=8;
+    ctx.fillStyle=rollStage===1?"#343b46":rollStage===3?"#11151b":car.color;
+    ctx.strokeStyle=crashing?"#ff4d5f":"#e9eef5";ctx.lineWidth=crashing?4:1.5;
+    ctx.beginPath();ctx.roundRect(-w/2,-h/2,w,h,Math.min(5,h/2));ctx.fill();ctx.stroke();
+    if(rollStage===null){
+      ctx.fillStyle="#17202a";ctx.fillRect(-4,-8,10,16);
+      ctx.fillStyle="#dce6f1";ctx.fillRect(12,-5,5,10);
+      ctx.fillStyle="#0d1117";ctx.fillRect(-13,-12,8,3);ctx.fillRect(6,-12,8,3);ctx.fillRect(-13,9,8,3);ctx.fillRect(6,9,8,3);
+    } else {
+      ctx.fillStyle="#dce6f1";ctx.fillRect(-9,-Math.max(2,h/2-2),18,Math.max(3,h-4));
+    }
     ctx.restore();
     ctx.fillStyle="#eef3f8";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(`${car.name}  ${car.speed} mph`,car.x,car.y-20);
+    if(crashing){ctx.fillStyle="#ff4d5f";ctx.font="bold 10px sans-serif";ctx.fillText(`⚠ ${car.crashState.type.toUpperCase()}`,car.x,car.y+28)}
+    if(performance.now()<car.crashBannerUntil){ctx.fillStyle="#ff4d5f";ctx.font="bold 16px sans-serif";ctx.fillText("LOSS OF CONTROL",car.x,car.y-38)}
   }
   function drawPreview(){
     if(!started||!player.alive)return;
@@ -360,7 +365,7 @@
     ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle="#f2b84b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(player.x,player.y);ctx.lineTo(x,y);ctx.stroke();
     ctx.translate(x,y);ctx.rotate(rad(h));ctx.strokeRect(-18,-10,36,20);ctx.restore();
   }
-  function draw(){drawArena();drawArc(player);drawPreview();drawCar(player);drawCar(ai)}
+  function draw(){drawArena();drawCrashTrail(player);drawCrashTrail(ai);drawArc(player);drawPreview();drawCar(player);drawCar(ai)}
   $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");updateUI();draw()}
   $("left15").onclick=()=>setSelected("bendL",1,"15° left bend");
   $("right15").onclick=()=>setSelected("bendR",1,"15° right bend");

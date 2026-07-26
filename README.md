@@ -1,4 +1,4 @@
-# Road Duel Arena v0.3.1
+# Road Duel Arena v0.3.2
 
 Open `index.html` directly in a modern browser.
 

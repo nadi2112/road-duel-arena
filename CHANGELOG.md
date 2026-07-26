@@ -1,6 +1,14 @@
 # Changelog
 
-## v0.3.1 — Handling Stabilization
+## v0.3.2 — Crash Polish
+
+- Failed bends now rotate the vehicle into the commanded heading before a crash skid begins; momentum remains along the pre-bend travel direction.
+- Removed automatic HC -6 spinout recovery. Spinouts now continue until the vehicle stops.
+- Added a unified visual crash state with red vehicle outlines, crash labels, loss-of-control banners, and dashed red crash trails.
+- Rollover graphics now cycle through side, roof, opposite side, and underside views rather than rotating like a spinout.
+- Preserved same-phase crash resolution, zero-speed cleanup, and arena-wall collision behavior from v0.3.1.
+
+## v0.3.2 — Handling Stabilization
 - Crash Table results and their first forced movement now resolve in the phase control is lost
 - Spinouts end automatically at 0 mph
 - Automatic HC −6 spinout recovery attempts on every scheduled movement phase
