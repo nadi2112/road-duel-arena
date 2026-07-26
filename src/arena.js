@@ -162,7 +162,15 @@
     else if(r<=6){tires(car,1);car.crashState={type:"skid",distance:.75,heading:h,next:.25};car.speed=Math.max(0,car.speed-10);car.firePenalty=99;log("Crash Table 1: moderate skid; tires -1; speed -10.","bad")}
     else if(r<=8){tires(car,2);car.crashState={type:"skid",distance:1,heading:h,next:.5};car.speed=Math.max(0,car.speed-20);car.firePenalty=99;log("Crash Table 1: severe skid; tires -2; speed -20.","bad")}
     else if(r<=10){tires(car,()=>roll(1));car.crashState={type:"spin",heading:h,dir:Math.random()<.5?-1:1};car.handling=-6;car.firePenalty=99;log("Crash Table 1: spinout.","bad")}
-    else if(r<=14){car.crashState={type:"roll",heading:h,stage:0};car.burning=r>=13&&roll(1)>=4;car.handling=-6;car.firePenalty=99;log(`Crash Table 1: rollover${car.burning?" and burning":""}.`,"bad")}
+    else if(r<=14){
+      const rollDir=Math.random()<.5?-1:1;
+      const bodyHeading=norm(h+rollDir*90);
+      car.heading=bodyHeading;
+      car.crashState={type:"roll",heading:h,bodyHeading,rollDir,stage:0,face:"under",tstop:true};
+      car.burning=r>=13&&roll(1)>=4;car.handling=-6;car.firePenalty=99;
+      log(`Crash Table 1: rollover${car.burning?" and burning":""}.`,"bad");
+      log(`${car.name} begins with a T-stop, turns broadside, and will roll along its original travel direction.`,"crash");
+    }
     else{tires(car,()=>roll(3));car.crashState={type:"vault",heading:h,remaining:roll(1),stage:0};car.handling=-6;car.firePenalty=99;log("Crash Table 1: vault.","bad")}
     if(car.speed===0)endCrashAtHalt(car);
   }
@@ -188,10 +196,18 @@
       const d=Math.min(1,inches);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;
       car.speed=Math.max(0,car.speed-20*d);if(car.speed===0)endCrashAtHalt(car)
     } else if(c.type==="roll"){
-      car.x+=Math.cos(rad(c.heading))*Math.min(1,inches)*SCALE;car.y+=Math.sin(rad(c.heading))*Math.min(1,inches)*SCALE;
-      const side=["right","top","left","under"][c.stage%4];side==="under"?tires(car,()=>roll(1)):damage(car,roll(1),side,"Rollover");c.stage++
+      const d=Math.min(1,inches);
+      car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;
+      car.heading=c.bodyHeading;
+      c.tstop=false;
+      c.stage=(c.stage+1)%4;
+      const sequence=c.rollDir>0?["right","top","left","under"]:["left","top","right","under"];
+      c.face=sequence[c.stage];
+      if(c.face==="under")tires(car,()=>roll(1));
+      else damage(car,roll(1),c.face,"Rollover");
+      log(`${car.name} rollover impact: ${c.face}.`,"crash");
     } else if(c.type==="vault"){
-      const d=Math.min(inches,c.remaining);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;c.remaining-=d;car.heading=norm(car.heading+180);if(c.remaining<=0){damage(car,roll(Math.max(1,Math.floor(car.speed/10))),["front","right","back","left","top","under"][Math.floor(Math.random()*6)],"Vault landing");car.crashState={type:"roll",heading:c.heading,stage:0}}
+      const d=Math.min(inches,c.remaining);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;c.remaining-=d;car.heading=norm(car.heading+180);if(c.remaining<=0){damage(car,roll(Math.max(1,Math.floor(car.speed/10))),["front","right","back","left","top","under"][Math.floor(Math.random()*6)],"Vault landing");car.crashState={type:"roll",heading:c.heading,bodyHeading:norm(c.heading+90),rollDir:1,stage:0,face:"under",tstop:false}}
     }
     car.crashTrail.push({x1:previous.x,y1:previous.y,x2:car.x,y2:car.y});
     if(car.crashTrail.length>30)car.crashTrail.shift();
@@ -335,24 +351,46 @@
   }
   function drawCar(car){
     if(!car.alive)return;
-    const crashing=!!car.crashState, rollStage=car.crashState?.type==="roll"?(car.crashState.stage%4):null;
+    const crashing=!!car.crashState;
+    const rollState=car.crashState?.type==="roll"?car.crashState:null;
     ctx.save();ctx.translate(car.x,car.y);ctx.rotate(rad(car.heading));
     ctx.shadowColor=crashing?"#ff3448":"#000";ctx.shadowBlur=crashing?18:8;
-    let w=36,h=20;
-    if(rollStage===0||rollStage===2)h=8;
-    ctx.fillStyle=rollStage===1?"#343b46":rollStage===3?"#11151b":car.color;
     ctx.strokeStyle=crashing?"#ff4d5f":"#e9eef5";ctx.lineWidth=crashing?4:1.5;
-    ctx.beginPath();ctx.roundRect(-w/2,-h/2,w,h,Math.min(5,h/2));ctx.fill();ctx.stroke();
-    if(rollStage===null){
+
+    if(!rollState){
+      const w=36,h=20;
+      ctx.fillStyle=car.color;ctx.beginPath();ctx.roundRect(-w/2,-h/2,w,h,5);ctx.fill();ctx.stroke();
       ctx.fillStyle="#17202a";ctx.fillRect(-4,-8,10,16);
       ctx.fillStyle="#dce6f1";ctx.fillRect(12,-5,5,10);
       ctx.fillStyle="#0d1117";ctx.fillRect(-13,-12,8,3);ctx.fillRect(6,-12,8,3);ctx.fillRect(-13,9,8,3);ctx.fillRect(6,9,8,3);
     } else {
-      ctx.fillStyle="#dce6f1";ctx.fillRect(-9,-Math.max(2,h/2-2),18,Math.max(3,h-4));
+      const face=rollState.face||"under";
+      if(face==="right"||face==="left"){
+        const tireY=face==="right"?8:-8;
+        ctx.fillStyle=car.color;ctx.beginPath();ctx.roundRect(-18,-6,36,12,4);ctx.fill();ctx.stroke();
+        ctx.fillStyle="#c7d2df";ctx.fillRect(-8,-4,16,8);
+        ctx.fillStyle="#05080c";ctx.beginPath();ctx.arc(-11,tireY,5,0,Math.PI*2);ctx.arc(11,tireY,5,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle="#f6f8fb";ctx.font="bold 8px sans-serif";ctx.textAlign="center";ctx.fillText(face.toUpperCase(),0,3);
+      } else if(face==="top"){
+        ctx.fillStyle=car.color;ctx.beginPath();ctx.roundRect(-18,-11,36,22,6);ctx.fill();ctx.stroke();
+        ctx.fillStyle="#9fc0d9";ctx.beginPath();ctx.roundRect(-9,-7,18,14,4);ctx.fill();
+        ctx.fillStyle="#eef4fa";ctx.fillRect(-2,-8,4,16);
+        ctx.fillStyle="#f6f8fb";ctx.font="bold 8px sans-serif";ctx.textAlign="center";ctx.fillText("ROOF",0,3);
+      } else {
+        ctx.fillStyle="#171b21";ctx.beginPath();ctx.roundRect(-18,-11,36,22,4);ctx.fill();ctx.stroke();
+        ctx.strokeStyle="#8b949e";ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(-12,-7);ctx.lineTo(12,-7);ctx.moveTo(-12,7);ctx.lineTo(12,7);ctx.moveTo(0,-9);ctx.lineTo(0,9);ctx.stroke();
+        ctx.fillStyle="#05080c";
+        [[-13,-12],[7,-12],[-13,9],[7,9]].forEach(([x,y])=>ctx.fillRect(x,y,7,4));
+        ctx.fillStyle="#d8dee7";ctx.font="bold 8px sans-serif";ctx.textAlign="center";ctx.fillText("UNDER",0,3);
+      }
     }
     ctx.restore();
     ctx.fillStyle="#eef3f8";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.fillText(`${car.name}  ${car.speed} mph`,car.x,car.y-20);
-    if(crashing){ctx.fillStyle="#ff4d5f";ctx.font="bold 10px sans-serif";ctx.fillText(`⚠ ${car.crashState.type.toUpperCase()}`,car.x,car.y+28)}
+    if(crashing){
+      const label=rollState?`⚠ ROLLOVER — ${(rollState.face||"under").toUpperCase()}`:`⚠ ${car.crashState.type.toUpperCase()}`;
+      ctx.fillStyle="#ff4d5f";ctx.font="bold 10px sans-serif";ctx.fillText(label,car.x,car.y+30)
+    }
     if(performance.now()<car.crashBannerUntil){ctx.fillStyle="#ff4d5f";ctx.font="bold 16px sans-serif";ctx.fillText("LOSS OF CONTROL",car.x,car.y-38)}
   }
   function drawPreview(){

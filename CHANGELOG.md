@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.3 — Rollover Refinement
+
+- Rollover results now begin with an immediate 90-degree T-stop, placing the vehicle broadside to its original path.
+- Rollover movement preserves the vehicle's pre-crash travel direction instead of following its body orientation.
+- Added clockwise/counterclockwise roll direction and explicit right-side, roof, left-side, and underside impact states.
+- Reworked rollover art with clearly visible tire positions, distinct side profiles, a windowed roof, and a mechanical underside.
+- Added rollover-face labels and per-impact event-log messages for easier playtesting.
+
+
 ## v0.3.2 — Crash Polish
 
 - Failed bends now rotate the vehicle into the commanded heading before a crash skid begins; momentum remains along the pre-bend travel direction.

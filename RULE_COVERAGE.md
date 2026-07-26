@@ -13,3 +13,8 @@ Planned: exact vehicle and wall collisions, detailed tire/wheel integration, com
 - Automatic HC -6 spinout recovery
 - Boundary/obstacle collision checks during uncontrolled movement
 - Basic reverse gear rules
+
+## v0.3.3 rollover refinement
+- Rollovers begin with a 90-degree T-stop.
+- The vehicle continues rolling along its original travel vector.
+- Rollover faces are visually and mechanically tracked as right side, roof, left side, and underside.
