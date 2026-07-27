@@ -1,0 +1,614 @@
+Road Duel Arena
+Game Design & Technical Design Document
+Document Version: 1.0
+Game Version: v0.4.1
+Next Milestone: v0.4.2
+
+1. Project Overview
+Project Goals
+Road Duel Arena is a browser-based vehicular combat game inspired by the mechanics of classic tabletop car-combat games.
+The primary goals are to:
+Implement the core movement, handling, combat, damage, and vehicle-construction systems.
+Preserve the tactical decisions of the tabletop game while using the computer to automate calculations and bookkeeping.
+Make complex events easy to understand through animation, replay, logs, and visual indicators.
+Build a modular foundation that can support additional vehicles, weapons, maneuvers, arenas, AI opponents, and game modes.
+Test whether a complete game can be designed and programmed primarily through collaboration with artificial intelligence.
+AI-Directed Development
+Road Duel Arena is intentionally being developed as an AI-led project.
+The AI is responsible for:
+Game-design suggestions
+Technical architecture
+Coding and debugging
+Feature planning
+Documentation
+Interface recommendations
+Rule interpretation and implementation proposals
+The human project leader is responsible for:
+Setting priorities
+Approving design decisions
+Supplying reference materials
+Testing releases
+Reporting problems
+Evaluating whether the game is enjoyable and understandable
+This development model is partly an experiment to determine whether current AI technology can independently handle the detailed design and implementation of a substantial hobby game. It is also intended to be a challenging and enjoyable collaboration.
+The project leader should not need to perform routine coding or low-level design work. The AI should propose, implement, document, and refine solutions based on testing feedback.
+Inspiration
+The project is inspired by Car Wars and similar tabletop vehicular-combat games.
+The original rulebook is used as a reference for mechanics. Road Duel Arena remains an original software implementation with its own code, interface, presentation, artwork, and design decisions.
+The guiding question is:
+How would Steve Jackson have designed Car Wars if computers existed first?
+Scope
+The intended scope includes:
+Arena-based vehicular combat
+Vehicle construction and garage management
+Speed, acceleration, braking, and reverse movement
+Handling Class and control loss
+The full maneuver set represented in the reference rules
+Crash tables, skids, spins, vaults, and rollovers
+Weapons represented in the reference rules
+Armor and internal damage
+Computer-controlled opponents
+Replay and developer inspection tools
+Multiple arenas and game modes
+Longer-term campaign and league systems
+The goal is not to reproduce the tabletop presentation exactly. The goal is to reproduce and expand upon its tactical mechanics in a computer-first format.
+Platform
+Road Duel Arena is implemented as a browser-based application.
+The browser platform was selected because it provides:
+Easy distribution
+No installation requirement
+Broad operating-system compatibility
+Built-in support for graphics, animation, sound, and user interfaces
+Rapid testing and iteration
+Straightforward sharing with friends
+All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
+Current Version
+The current stable baseline is v0.4.1.
+Major implemented systems include:
+Arena movement
+Basic vehicle combat
+Computer-controlled opponent behavior
+Garage and vehicle construction
+Handling and crash resolution
+Skids, spins, vaults, and rollovers
+Replay controls
+Camera controls
+Developer inspector
+Combat log
+Crash-state visual indicators
+Current Milestone
+The next planned release is v0.4.2.
+Its primary goals are:
+Give the combat log a dedicated, permanently visible column.
+Correct the reverse-gear movement preview so it appears behind the vehicle.
+Improve replay reliability and presentation.
+Perform general interface cleanup.
+
+2. Design Philosophy
+Computer-First Design
+Road Duel Arena should not simply imitate a tabletop game on a screen.
+Whenever a rule is implemented, the design should ask:
+How would this mechanic work if it had originally been designed for a computer?
+The computer should handle calculations, table lookups, state tracking, animation, and record keeping. The player should remain focused on tactical decisions.
+Rules First
+The underlying mechanics should remain recognizable and tactically meaningful.
+The presentation may be improved through:
+Animated crashes
+Replay
+Visual skid trails
+Rollover animation
+Loss-of-control graphics
+Automatic calculations
+Combat logs
+Developer inspection tools
+These improvements should explain and streamline the rules rather than casually replace them.
+Readability Over Literal Simulation
+When multiple implementations produce similar mechanical results, preference should be given to the one players understand most easily.
+Examples include:
+A red outline showing that a vehicle is out of control
+Dashed trails showing movement and crash direction
+Rollover graphics showing vehicle orientation
+Crash-state badges
+A heading-and-momentum compass
+Persistent combat-log messages
+A mechanic that is technically accurate but visually confusing should be improved.
+Simulation as the Source of Truth
+The simulation determines the actual game state.
+Rendering, replay, developer tools, and future AI systems should all read from that state rather than maintaining separate versions of events.
+This supports:
+Consistent behavior
+Reliable replay
+Easier debugging
+Automated testing
+Future multiplayer synchronization
+Visual Feedback Is Functional
+Animations and overlays are not merely decorative.
+They explain:
+What happened
+Why it happened
+Where the vehicle is moving
+Which direction it is facing
+Whether the driver remains in control
+How damage or a crash changed the vehicle state
+Visual communication is therefore considered part of the gameplay system.
+AI Ownership of Detailed Design
+The AI should take responsibility for the detailed implementation of approved features.
+When a new feature is requested, the expected workflow is:
+Interpret the goal and relevant rules.
+Propose an appropriate computer-first design.
+Implement the feature.
+Validate it.
+Present it for playtesting.
+Refine it from project-leader feedback.
+Update this document.
+The project leader should guide the destination without needing to manage every technical step.
+Documenting Important Decisions
+Significant decisions should be recorded in the Rule Deviations or Architecture sections.
+Each entry should briefly identify:
+The original or previous behavior
+Why it was rejected or changed
+The current behavior
+The reason for the decision
+Any possible future revision
+This prevents future development from accidentally reversing decisions whose reasoning has already been established.
+# 3. Gameplay
+## Movement
+Vehicles move in phases according to speed. The movement system tracks position, heading, speed, and travel direction.
+Supported movement includes:
+Acceleration and deceleration
+Braking
+Forward and reverse movement
+Steering and turning
+Speed-based movement phases
+Planned movement preview
+The long-term goal is to support every applicable maneuver from the reference rules.
+## Handling
+Handling Class represents the driver's remaining control of the vehicle.
+Maneuvers reduce Handling Class according to difficulty. Stable driving allows Handling Class to recover over time.
+When control is lost, the crash system determines the result.
+## Maneuvers
+The maneuver system is intended to include all maneuvers supported by the reference rules.
+Each maneuver must define:
+Required movement
+Handling difficulty
+Speed restrictions
+Position and heading changes
+Interaction with crashes and collisions
+Visual preview and animation
+Any maneuver adapted for computer play will be documented in Section 4.
+## Crash System
+Loss-of-control events may produce:
+Skids
+Spins
+Vaults
+Rollovers
+Stops
+Other crash-table results
+Crash movement preserves the distinction between vehicle heading and momentum.
+Visual indicators show the current crash state, travel path, and vehicle orientation.
+## Weapons
+Combat currently supports basic vehicle weapon use.
+The complete weapon system is intended to include all applicable weapons from the reference rules, including their:
+Firing arcs
+Range behavior
+Accuracy modifiers
+Damage
+Ammunition
+Space and weight requirements
+Special effects
+Weapons that require adaptation for computer play will be documented individually.
+## Combat
+Combat is based on positioning, range, firing arcs, and line of sight.
+A typical attack includes:
+Select a weapon and target.
+Verify range and firing arc.
+Resolve the attack.
+Apply armor or internal damage.
+Record the result in the combat log.
+## Damage
+Damage is applied first to the affected armor location and then to internal vehicle systems when armor is penetrated.
+The long-term damage model should support:
+Directional armor
+Internal components
+Weapons
+Tires
+Crew
+Power plants
+Mobility loss
+Vehicle destruction
+## Garage
+The garage supports vehicle construction and configuration.
+Vehicle design may include:
+Chassis and body selection
+Armor
+Weapons
+Ammunition
+Tires
+Power plant
+Equipment
+Weight
+Space
+Cost
+The garage should validate designs and prevent illegal configurations.
+## Artificial Intelligence
+Computer-controlled vehicles should use the same rules and simulation as human-controlled vehicles.
+AI responsibilities include:
+Movement planning
+Target selection
+Weapon use
+Handling-risk evaluation
+Collision avoidance
+Tactical positioning
+Multiple AI skill levels may be added later.
+## Victory Conditions
+The current focus is arena combat.
+Typical victory conditions may include:
+Destroying all opposing vehicles
+Disabling the opponent
+Surviving for a required period
+Completing a scenario objective
+Additional scenario types may be added later.
+
+# 4. Rule Deviations
+This section records deliberate differences from previous implementations or literal tabletop presentation.
+## Crash Skids
+Original interpretation:
+The vehicle continued straight before entering the skid.
+Rejected because:
+The result felt delayed and did not clearly connect the driver's maneuver to the crash.
+Current implementation:
+The vehicle rotates toward the commanded heading while momentum continues along the original travel vector. The crash skid then begins.
+Reason:
+The result is easier to understand and better represents the intended crash behavior visually.
+## Spin Recovery
+Previous implementation:
+The vehicle automatically recovered when Handling Class reached −6.
+Rejected because:
+Spins often ended before the player could clearly observe them.
+Current implementation:
+A spinning vehicle continues spinning until it stops.
+Possible future rule:
+Driver-controlled recovery may be added as an optional mechanic.
+## Rollovers
+Original implementation:
+A rollover appeared as a flat spinning vehicle sprite.
+Rejected because:
+It did not clearly communicate a vehicle overturning.
+Current implementation:
+The rollover begins with a T-stop, turns broadside, uses quarter-turn graphics, and preserves momentum.
+Reason:
+The sequence is easier to follow and visually communicates the rollover.
+## Loss-of-Control Presentation
+Tabletop presentation:
+Control states are communicated through rules, counters, and vehicle placement.
+Current implementation:
+Loss of control is shown using:
+Red vehicle outlines
+Dashed crash trails
+Crash badges
+Rollover graphics
+Heading and momentum indicators
+Combat-log messages
+Reason:
+The computer should communicate important state changes immediately.
+## Automatic Bookkeeping
+The computer automatically manages:
+Movement phases
+Handling changes
+Crash-table results
+Damage application
+Replay history
+Combat-log entries
+Reason:
+Automation removes administrative work without removing tactical choices.
+## Replay
+Replay is not part of the original tabletop process.
+It is included because it allows players and developers to inspect complex events and verify simulation behavior.
+## Future Deviations
+Any future adaptation involving maneuvers, weapons, collisions, or campaign rules should be added to this section before release.
+
+# 5. Architecture
+## Simulation Engine
+The simulation engine is the authoritative source of game state.
+It manages:
+Vehicles
+Movement
+Speed
+Heading
+Momentum
+Handling
+Crashes
+Combat
+Damage
+Turn progression
+Rendering and interface systems must not independently modify simulation results.
+## Movement Engine
+The movement engine converts speed and player commands into phase-based vehicle movement.
+It handles:
+Position updates
+Heading changes
+Maneuver execution
+Reverse movement
+Movement previews
+Crash movement
+Arena boundaries
+## Handling and Crash Engine
+This subsystem tracks handling status and resolves loss-of-control events.
+It includes:
+Handling costs
+Handling recovery
+Crash-table selection
+Skids
+Spins
+Vaults
+Rollovers
+Crash-state termination
+## Combat Engine
+The combat engine resolves:
+Target validity
+Firing arcs
+Range
+Hit determination
+Damage
+Ammunition use
+Combat-log events
+## Collision Engine
+Vehicle collisions and ramming are planned but not yet complete.
+The future system should support:
+Collision detection
+Relative speed
+Impact angle
+Vehicle mass
+Damage
+Momentum transfer
+Post-impact movement
+Loss of control
+## Replay Engine
+The replay engine records enough state or event history to reconstruct gameplay.
+It supports:
+Step forward
+Step backward
+Pause
+Resume
+Event inspection
+Camera review
+Replay should remain deterministic and should not alter the actual match state.
+## Rendering System
+The renderer displays simulation state through:
+Vehicle sprites
+Rotation and movement
+Skid trails
+Crash outlines
+Rollover graphics
+Movement previews
+Arena objects
+Status indicators
+## Camera System
+The camera supports viewing and reviewing arena action.
+Planned or existing functions include:
+Pan
+Zoom
+Vehicle focus
+Replay tracking
+Reset view
+## User Interface
+The interface includes:
+Arena view
+Vehicle controls
+Status information
+Combat log
+Replay controls
+Camera controls
+Developer inspector
+Garage screens
+The combat log is planned to receive its own persistent column.
+## Developer Tools
+Developer tools expose internal state for testing and debugging.
+They may display:
+Position
+Heading
+Momentum direction
+Speed
+Handling Class
+Crash state
+Replay state
+AI decisions
+These tools are permanent project features.
+## Artificial Intelligence
+The AI subsystem reads the same legal moves and game state available to the simulation.
+It should not rely on hidden shortcuts that violate the game rules.
+## Garage System
+The garage manages vehicle construction, equipment selection, validation, and saved designs.
+It should remain separate from arena simulation while producing compatible vehicle data.
+## Project Workflow
+Source code and version history are maintained through GitHub.
+The intended release workflow is:
+Define the milestone.
+Implement the feature.
+Test the build.
+Record playtest feedback.
+Fix identified problems.
+Update this document.
+Commit and tag the release.
+Publish the playable build through GitHub Pages when ready.
+
+# 6. Version History
+## v0.1 — Arena Prototype
+Introduced:
+Arena
+Vehicle movement
+Basic combat
+Initial AI opponent
+Core turn flow
+## v0.1.1 — Movement Corrections
+Improved:
+Movement-chart behavior
+Phase calculations
+Vehicle positioning
+## v0.2.0 — Garage
+Introduced:
+Vehicle construction
+Garage interface
+Vehicle configuration
+Design validation foundation
+## v0.3.0 — Crash System
+Introduced:
+Handling and control loss
+Crash tables
+Skids
+Spins
+Vaults
+Rollovers
+Hazards
+## v0.3.2 — Crash Presentation
+Improved:
+Skid logic
+Crash visualization
+Red crash outline
+Dashed crash trail
+Loss-of-control feedback
+## v0.3.3 — Rollover Improvements
+Introduced or improved:
+T-stop rollover entry
+Broadside rollover movement
+Quarter-turn rollover graphics
+Momentum preservation
+## v0.4.0 — Replay and Developer Tools
+Introduced:
+Replay system
+Camera controls
+Developer inspector
+Layout improvements
+Expanded combat log
+## v0.4.1 — Replay and Inspection Refinements
+Improved:
+Replay behavior
+Developer inspector
+Heading and momentum compass
+Crash-state badges
+General interface behavior
+
+# 7. Known Bugs
+Current known issues include:
+## Replay Resume
+Resuming from replay may occasionally leave normal controls unavailable or in an incorrect state.
+## Reverse Movement Preview
+The dashed movement preview is drawn in front of the vehicle while reverse gear is selected.
+It should appear behind the vehicle along the actual travel direction.
+## Combat Log Layout
+The combat log currently requires scrolling and competes with other interface content.
+It should remain visible in a dedicated column.
+## General Bug Process
+When a bug is fixed:
+Remove it from this section.
+Add the fix to the appropriate version-history entry.
+Record any resulting design decision in Section 4 or Section 5.
+
+# 8. Future Roadmap
+## Near-Term
+### v0.4.2
+Planned work:
+Dedicated combat-log column
+Correct reverse movement preview
+Replay polish
+Interface cleanup
+General bug fixes
+## Maneuver Expansion
+Implement all applicable maneuvers from the reference rules.
+Work includes:
+Rule review
+Maneuver data definitions
+Movement preview
+Handling costs
+Animation
+AI support
+Testing
+Documentation of any adaptations
+## Weapon Expansion
+Implement all applicable weapons from the reference rules.
+Work includes:
+Weapon statistics
+Firing arcs
+Range and accuracy
+Damage
+Ammunition
+Special effects
+Garage integration
+AI use
+Visual and audio feedback
+## Medium-Term
+Planned systems include:
+Vehicle collisions
+Ramming
+Collision damage
+Momentum transfer
+Improved AI
+Multiple AI vehicles
+Additional arena layouts
+Expanded damage modeling
+Sound effects
+Improved visual effects
+## Long-Term
+Possible future features include:
+Tracks and road courses
+Scenario-based missions
+Campaign mode
+Driver progression
+Vehicle persistence
+Leagues and tournaments
+Multiple players
+Network multiplayer
+Saved replays
+Custom arenas
+Community-created vehicles
+Network multiplayer is a possible future goal rather than a current commitment.
+
+# 9. Playtest Notes
+Playtest notes record direct observations and resulting decisions.
+Each entry should use the following format:
+Version:
+Release being tested.
+Observation:
+What the tester noticed.
+Decision:
+What will remain or change.
+Action:
+Specific follow-up work.
+## v0.3.2
+Observation:
+“Skids finally feel correct.”
+Decision:
+Keep the current heading-and-momentum skid behavior.
+Action:
+Treat the implementation as the baseline for future crash changes.
+## v0.3.3
+Observation:
+The updated rollover is easier to understand than the flat spinning sprite.
+Decision:
+Keep the T-stop and quarter-turn rollover presentation.
+Action:
+Continue refining the graphics without changing the basic sequence.
+## v0.4.1
+Observation:
+Reverse gear works, but the dashed preview appears in the wrong direction.
+Decision:
+Keep the reverse mechanic and correct only the preview rendering.
+Action:
+Schedule the fix for v0.4.2.
+## v0.4.1
+Observation:
+The combat log contains important information but is too easy to lose while scrolling.
+Decision:
+Make the combat log a permanent part of the main arena layout.
+Action:
+Add a dedicated log column in v0.4.2.
+## Ongoing Playtest Priorities
+Future testing should evaluate:
+Whether vehicle movement is understandable
+Whether crashes clearly communicate heading and momentum
+Whether maneuvers behave consistently
+Whether AI actions appear legal and reasonable
+Whether weapon results are clearly reported
+Whether the interface keeps essential information visible
+Whether replay accurately reproduces events
+Whether new features preserve existing behavior
