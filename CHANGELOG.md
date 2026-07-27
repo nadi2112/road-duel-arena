@@ -1,6 +1,17 @@
 # Changelog
 
-## v0.4.0
+## v0.4.1 — Replay Recovery & Inspector Polish
+
+- Fixed live controls remaining disabled after returning to the newest replay frame.
+- Added explicit **Resume Live** control; imported replay files remain safely view-only.
+- Replay playback automatically returns to live mode at the end of a current-game replay.
+- Reworked control enable/disable logic so every button is recalculated when leaving replay mode.
+- Replaced the unexplained RNG value with random seed, replay state/frame, and a subdued advanced RNG-state field.
+- Added color-coded crash-state badges.
+- Added a heading-versus-momentum compass to the developer inspector.
+
+
+## v0.4.1
 - Added deterministic replay recording and JSON export/import.
 - Added replay timeline, stepping, and playback.
 - Added camera zoom, pan, fit, center, and follow controls.

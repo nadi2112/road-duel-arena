@@ -84,7 +84,8 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,label:"Go straight"}, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.4.0",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.4.1",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
 
@@ -283,26 +284,69 @@
   }
   function clone(v){return JSON.parse(JSON.stringify(v))}
   function snapshot(label="Phase resolved"){const frame={turn,phase,label,rngState,player:clone(player),ai:clone(ai),events:replay.events.length};replay.frames.push(frame);replayIndex=replay.frames.length-1;updateReplayUI()}
-  function restoreFrame(i){if(!replay.frames.length)return;replayMode=true;replayIndex=Math.max(0,Math.min(i,replay.frames.length-1));const f=replay.frames[replayIndex];player=clone(f.player);ai=clone(f.ai);turn=f.turn;phase=f.phase;rngState=f.rngState||rngState;updateUI();draw();updateReplayUI()}
-  function updateReplayUI(){if(!$("replaySlider"))return;$("replaySlider").max=Math.max(0,replay.frames.length-1);$("replaySlider").value=Math.max(0,replayIndex);$("replayPosition").textContent=replayMode?`Frame ${replayIndex+1}/${replay.frames.length}`:`Live · ${replay.frames.length} frames`}
+  function resumeLive(){
+    if(replayReadOnly){toast("Imported replays are view-only.");return false}
+    stopReplay();
+    replayMode=false;
+    replayIndex=replay.frames.length-1;
+    updateUI();draw();updateReplayUI();
+    toast("Live controls restored.");
+    return true;
+  }
+  function restoreFrame(i,{autoResume=true}={}){
+    if(!replay.frames.length)return;
+    replayIndex=Math.max(0,Math.min(i,replay.frames.length-1));
+    const f=replay.frames[replayIndex];
+    player=clone(f.player);ai=clone(f.ai);turn=f.turn;phase=f.phase;rngState=f.rngState||rngState;
+    // Returning to the newest frame of the current game means returning to live play.
+    replayMode=!(autoResume && !replayReadOnly && replayIndex===replay.frames.length-1);
+    updateUI();draw();updateReplayUI();
+  }
+  function updateReplayUI(){
+    if(!$("replaySlider"))return;
+    $("replaySlider").max=Math.max(0,replay.frames.length-1);
+    $("replaySlider").value=Math.max(0,replayIndex);
+    $("replayPosition").textContent=replayMode?`Replay · ${replayIndex+1}/${replay.frames.length}`:`LIVE · ${replay.frames.length} frames`;
+    if($("resumeLive")){
+      $("resumeLive").disabled=!replayMode||replayReadOnly;
+      $("resumeLive").textContent=replayReadOnly?"Imported (view only)":"Resume Live";
+    }
+  }
   function exportReplay(){const payload={...replay,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`road-duel-replay-T${turn}-P${phase}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),500)}
-  function importReplayFile(file){const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!Array.isArray(data.frames)||!data.frames.length)throw new Error("No replay frames");replay=data;rngSeed=data.seed||1;rngState=rngSeed;locked=true;restoreFrame(0);log("Imported replay loaded. Use replay controls to inspect it.","warn","movement")}catch(e){toast(`Replay import failed: ${e.message}`)}};reader.readAsText(file)}
+  function importReplayFile(file){const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!Array.isArray(data.frames)||!data.frames.length)throw new Error("No replay frames");replay=data;rngSeed=data.seed||1;rngState=rngSeed;replayReadOnly=true;locked=true;restoreFrame(0,{autoResume:false});log("Imported replay loaded. Use replay controls to inspect it.","warn","movement")}catch(e){toast(`Replay import failed: ${e.message}`)}};reader.readAsText(file)}
   function stopReplay(){if(replayTimer){clearInterval(replayTimer);replayTimer=null}if($("replayPlay"))$("replayPlay").textContent="Play"}
-  function toggleReplayPlay(){if(replayTimer){stopReplay();return}if(!replay.frames.length)return;$("replayPlay").textContent="Pause";replayTimer=setInterval(()=>{if(replayIndex>=replay.frames.length-1){stopReplay();return}restoreFrame(replayIndex+1)},500)}
+  function toggleReplayPlay(){if(replayTimer){stopReplay();return}if(!replay.frames.length)return;if(!replayMode&&!replayReadOnly)restoreFrame(0,{autoResume:false});$("replayPlay").textContent="Pause";replayTimer=setInterval(()=>{if(replayIndex>=replay.frames.length-1){stopReplay();if(!replayReadOnly)resumeLive();return}restoreFrame(replayIndex+1)},500)}
   function setSelected(type,d,label){if(replayMode)return;selected={type,d,label};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}.`;draw()}
   function updateUI(){
     $("turnNum").textContent=turn;$("phaseNum").textContent=phase;$("speed").textContent=`${player.direction<0?"R ":""}${player.speed}`;$("handling").textContent=player.handling;
     $("ammo").textContent=player.ammo;$("weaponDP").textContent=player.weaponDP;
     $("armor").innerHTML=Object.entries(player.armor).map(([k,v])=>`<div>${k}<strong>${v}</strong></div>`).join("");
     $("phasebar").innerHTML=[1,2,3,4,5].map(p=>`<div class="phase ${p===phase?'active':''}">${p}</div>`).join("");
-    $("accel").disabled=player.changedSpeed||player.speed>=player.topSpeed;
-    $("brake").disabled=player.changedSpeed||player.speed<=0;
-    if($("reverse")){$("reverse").disabled=player.speed!==0||player.stoppedTurns<1;$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
-    $("fire").disabled=replayMode||player.firedThisPhase||player.ammo<=0||!player.alive;
-    ["accel","brake","reverse","left15","right15","driftL","driftR","straight","commit"].forEach(id=>{if($(id)&&replayMode)$(id).disabled=true});
+    const controlsLocked=replayMode||locked||!player.alive;
+    $("accel").disabled=controlsLocked||player.changedSpeed||player.speed>=player.topSpeed;
+    $("brake").disabled=controlsLocked||player.changedSpeed||player.speed<=0;
+    if($("reverse")){$("reverse").disabled=controlsLocked||player.speed!==0||player.stoppedTurns<1;$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
+    $("fire").disabled=controlsLocked||player.firedThisPhase||player.ammo<=0;
+    ["left15","right15","driftL","driftR","straight","commit"].forEach(id=>{if($(id))$(id).disabled=controlsLocked});
     updateInspector();updateReplayUI();
   }
-  function updateInspector(){if(!$("inspector"))return;const car=$("inspectCar")?.value==="ai"?ai:player;const travel=movementHeading(car);const crash=car.crashState?`${car.crashState.type}${car.crashState.face?` / ${car.crashState.face}`:""}`:"normal";const values={Position:`${car.x.toFixed(1)}, ${car.y.toFixed(1)}`,Speed:`${car.speed} mph`,Heading:`${norm(car.heading).toFixed(0)}°`,Momentum:`${travel.toFixed(0)}°`,Handling:car.handling,HC:car.hc,"Crash state":crash,Internal:car.internal,Direction:car.direction<0?"reverse":"forward",RNG:rngState};$("inspector").innerHTML=Object.entries(values).map(([k,v])=>`<div><b>${k}</b>${v}</div>`).join("")}
+  function updateInspector(){
+    if(!$("inspector"))return;
+    const car=$("inspectCar")?.value==="ai"?ai:player;
+    const heading=norm(car.heading), travel=movementHeading(car);
+    const crashType=car.crashState?.type||"normal";
+    const crash=`${crashType}${car.crashState?.face?` / ${car.crashState.face}`:""}`;
+    const statusClass={normal:"statusNormal",skid:"statusSkid",spin:"statusSpin",roll:"statusRoll",vault:"statusVault"}[crashType]||"statusCrash";
+    const frameText=replay.frames.length?`${Math.max(0,replayIndex)+1} / ${replay.frames.length}`:"0 / 0";
+    $("inspector").innerHTML=`
+      <div><b>Position</b>${car.x.toFixed(1)}, ${car.y.toFixed(1)}</div><div><b>Speed</b>${car.speed} mph</div>
+      <div><b>Heading</b>${heading.toFixed(0)}°</div><div><b>Momentum</b>${travel.toFixed(0)}°</div>
+      <div><b>Handling</b>${car.handling}</div><div><b>HC</b>${car.hc}</div>
+      <div><b>Crash state</b><span class="statusBadge ${statusClass}">${crash}</span></div><div><b>Internal</b>${car.internal}</div>
+      <div><b>Direction</b>${car.direction<0?"reverse":"forward"}</div><div><b>Replay</b>${replayMode?"REPLAY":"LIVE"} · ${frameText}</div>
+      <div><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="Internal pseudo-random generator state; useful only for exact replay debugging"><b>RNG state</b>${rngState}</div>
+      <div class="directionCompass"><b>Heading / momentum</b><span class="compassRose">N</span><i class="headingArrow" style="transform:translate(-50%,-88%) rotate(${heading}deg)"></i><i class="momentumArrow" style="transform:translate(-50%,-88%) rotate(${travel}deg)"></i><span class="compassLegend">body&nbsp;◆ &nbsp; momentum&nbsp;➤</span></div>`;
+  }
   function checkEnd(){
     if(!player.alive||!ai.alive){
       locked=true;$("endOverlay").style.display="flex";
@@ -424,7 +468,7 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.0",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.1",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
   $("left15").onclick=()=>setSelected("bendL",1,"15° left bend");
   $("right15").onclick=()=>setSelected("bendR",1,"15° right bend");
   $("driftL").onclick=()=>setSelected("driftL",1,"left drift");
@@ -450,7 +494,7 @@
   canvas.addEventListener("pointermove",e=>{if(!camera.dragging)return;const r=canvas.getBoundingClientRect();camera.x+=(e.clientX-camera.lastX)*W/r.width;camera.y+=(e.clientY-camera.lastY)*H/r.height;camera.lastX=e.clientX;camera.lastY=e.clientY;draw()});
   canvas.addEventListener("pointerup",e=>{camera.dragging=false;canvas.classList.remove("dragging");try{canvas.releasePointerCapture(e.pointerId)}catch{}});
   if($("logFilter"))$("logFilter").onchange=applyLogFilter;if($("inspectCar"))$("inspectCar").onchange=updateInspector;
-  if($("replayStart"))$("replayStart").onclick=()=>{stopReplay();restoreFrame(0)};if($("replayBack"))$("replayBack").onclick=()=>{stopReplay();restoreFrame(replayIndex-1)};if($("replayForward"))$("replayForward").onclick=()=>{stopReplay();restoreFrame(replayIndex+1)};if($("replayPlay"))$("replayPlay").onclick=toggleReplayPlay;if($("replaySlider"))$("replaySlider").oninput=e=>{stopReplay();restoreFrame(Number(e.target.value))};if($("exportReplay"))$("exportReplay").onclick=exportReplay;if($("importReplay"))$("importReplay").onchange=e=>{if(e.target.files[0])importReplayFile(e.target.files[0])};
+  if($("replayStart"))$("replayStart").onclick=()=>{stopReplay();restoreFrame(0,{autoResume:false})};if($("replayBack"))$("replayBack").onclick=()=>{stopReplay();restoreFrame(replayIndex-1,{autoResume:false})};if($("replayForward"))$("replayForward").onclick=()=>{stopReplay();restoreFrame(replayIndex+1)};if($("replayPlay"))$("replayPlay").onclick=toggleReplayPlay;if($("replaySlider"))$("replaySlider").oninput=e=>{stopReplay();restoreFrame(Number(e.target.value))};if($("resumeLive"))$("resumeLive").onclick=resumeLive;if($("exportReplay"))$("exportReplay").onclick=exportReplay;if($("importReplay"))$("importReplay").onchange=e=>{if(e.target.files[0])importReplayFile(e.target.files[0])};
   function toggleHotkeys(show){const o=$("hotkeyOverlay");if(!o)return;o.style.display=(show===undefined?(o.style.display==="none"?"flex":"none"):(show?"flex":"none"))}
   document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w")$("accel").click();else if(k==="arrowdown"||k==="x")$("brake").click();else if(k==="arrowleft"||k==="q")$("left15").click();else if(k==="arrowright"||k==="e")$("right15").click();else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="v"&&$("reverse"))$("reverse").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
   if($("closeHotkeys"))$("closeHotkeys").onclick=()=>toggleHotkeys(false);

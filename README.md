@@ -1,4 +1,4 @@
-# Road Duel Arena v0.4.0
+# Road Duel Arena v0.4.1
 
 Open `index.html` directly in a modern browser.
 
@@ -14,10 +14,10 @@ Open `index.html` directly in a modern browser.
 Arrows/WQEX drive, A/D drift, S straight, F fire, Space/Enter commit, H help, Escape close/select straight.
 
 ## Remaining approximations
-Top-down rollover/vault animation and landing damage are practical visual approximations. Exact vehicle and wall collision procedures remain planned for v0.4.0.
+Top-down rollover/vault animation and landing damage are practical visual approximations. Exact vehicle and wall collision procedures remain planned for v0.4.1.
 
 
-## v0.4.0 highlights
+## v0.4.1 highlights
 - Deterministic seeded random generator and phase-by-phase replay snapshots
 - Replay export/import with timeline controls
 - Zoom, pan, fit-arena, center-car, and follow-camera controls
