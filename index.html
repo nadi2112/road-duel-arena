@@ -1,5 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.4.3</title><link rel="stylesheet" href="styles.css"></head><body>
-<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.4.3 Driving Controls & Readability</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.4.4</title><link rel="stylesheet" href="styles.css"></head><body>
+<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.4.4 Phase Speed & Bend Controls</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
 <main>
 <section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.2 adds a rules-driven vehicle garage, saved designs, live validation, and arena vehicle selection.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
 
@@ -33,7 +33,7 @@
 
   <section class="arenaViewport"><div class="cameraToolbar"><button id="zoomOut">−</button><button id="zoomIn">+</button><button id="fitArena">Fit Arena</button><button id="centerPlayer">Center Car</button><button id="followPlayer">Follow: Off</button><span id="zoomLabel">100%</span></div><section id="gameWrap">
     <canvas id="game" width="900" height="900"></canvas>
-    <div id="toast"></div><div class="overlay" id="hotkeyOverlay" style="display:none"><div class="card hotkeyCard"><h2>Keyboard Quick Reference</h2><div class="hotkeyGrid"><kbd>↑ / W</kbd><span>Select accelerate</span><kbd>↓ / X</kbd><span>Select decelerate</span><kbd>C</kbd><span>Select hold speed</span><kbd>← / Q</kbd><span>Bend left</span><kbd>→ / E</kbd><span>Bend right</span><kbd>A</kbd><span>Drift left</span><kbd>D</kbd><span>Drift right</span><kbd>S</kbd><span>Straight</span><kbd>V</kbd><span>Forward / reverse gear</span><kbd>F</kbd><span>Fire</span><kbd>Space / Enter</kbd><span>Commit phase</span><kbd>H / ?</kbd><span>Help</span><kbd>Esc</kbd><span>Close / straight</span></div><button id="closeHotkeys" class="primary">Return to Duel</button></div></div>
+    <div id="toast"></div><div class="overlay" id="hotkeyOverlay" style="display:none"><div class="card hotkeyCard"><h2>Keyboard Quick Reference</h2><div class="hotkeyGrid"><kbd>↑ / W</kbd><span>Increase selected speed change</span><kbd>↓ / X</kbd><span>Decrease selected speed change</span><kbd>C</kbd><span>Select hold speed</span><kbd>← / Q</kbd><span>Bend left</span><kbd>→ / E</kbd><span>Bend right</span><kbd>A</kbd><span>Drift left</span><kbd>D</kbd><span>Drift right</span><kbd>S</kbd><span>Straight</span><kbd>V</kbd><span>Forward / reverse gear</span><kbd>F</kbd><span>Fire</span><kbd>Space / Enter</kbd><span>Commit phase</span><kbd>H / ?</kbd><span>Help</span><kbd>Esc</kbd><span>Close / straight</span></div><button id="closeHotkeys" class="primary">Return to Duel</button></div></div>
     <div class="overlay" id="startOverlay">
       <div class="card">
         <h2>Amateur Arena Duel</h2>
@@ -66,12 +66,19 @@
     <section class="panel">
       <h3>Driving</h3>
       <div class="controls">
-        <button id="brake" class="speedChoice">Decelerate −5</button>
-        <button id="holdSpeed" class="speedChoice selected">Hold Speed</button>
-        <button id="accel" class="speedChoice">Accelerate</button>
+        <label class="wide controlLabel">Speed change this phase
+          <select id="speedChange"><option value="0">Hold speed</option></select>
+        </label>
         <button id="reverse" class="wide">Select Reverse Gear</button>
-        <button id="left15">Bend Left 15°</button>
-        <button id="right15">Bend Right 15°</button>
+        <label class="wide controlLabel">Bend angle
+          <select id="bendAngle">
+            <option value="15">15° — D1</option><option value="30">30° — D2</option>
+            <option value="45">45° — D3</option><option value="60">60° — D4</option>
+            <option value="75">75° — D5</option><option value="90">90° — D6</option>
+          </select>
+        </label>
+        <button id="bendLeft">Bend Left</button>
+        <button id="bendRight">Bend Right</button>
         <button id="driftL">Drift Left</button>
         <button id="driftR">Drift Right</button>
         <button id="straight" class="wide">Go Straight</button>

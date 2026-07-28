@@ -133,3 +133,8 @@ main{max-width:1800px}
 .compassNote{position:absolute;left:6px;right:6px;bottom:4px;color:#8e99aa;font-size:9px}
 @media(max-width:1380px){#arena #gameWrap{max-width:min(100%,72vh)}}
 @media(max-width:1050px){.arenaViewport{height:auto;min-height:0}#arena #gameWrap{max-width:min(100%,82vh);margin-inline:auto}}
+
+/* v0.4.4 phase speed and bend controls */
+.controlLabel{display:flex;flex-direction:column;gap:6px;color:#aeb8c7;font-size:12px;font-weight:700}
+.controlLabel select{width:100%}
+#speedChange:disabled,#bendAngle:disabled{opacity:.55;cursor:not-allowed}

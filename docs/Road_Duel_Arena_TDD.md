@@ -1,8 +1,8 @@
 Road Duel Arena
 Game Design & Technical Design Document
-Document Version: 1.2
-Game Version: v0.4.3
-Next Milestone: v0.5.0
+Document Version: 1.3
+Game Version: v0.4.4
+Next Milestone: skid-mechanics review
 
 1. Project Overview
 Project Goals
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.4.3.
+The current stable baseline is v0.4.4.
 Major implemented systems include:
 Arena movement
 Basic vehicle combat
@@ -77,12 +77,15 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.4.3 milestone is complete.
+The v0.4.4 milestone is complete.
 Completed goals:
-Gave the combat log a dedicated, permanently visible column on wide screens.
-Corrected the reverse-gear movement preview so it appears behind the vehicle.
-Preserved responsive layouts for narrower browser windows.
-Updated replay version metadata and release documentation.
+Corrected user-facing heading and momentum values to use compass bearings.
+Allowed a speed change at the beginning of any phase until a nonzero change is committed that turn.
+Added acceleration and normal deceleration choices in 5 mph increments.
+Limited acceleration choices by each vehicle's configured maximum acceleration.
+Added bends from 15° through 90° in 15° increments with D1 through D6 difficulty.
+Updated bend previews, replay metadata, release documentation, and the maintained TDD filename.
+Deferred skid-mechanics changes for a focused review after this release.
 
 2. Design Philosophy
 Computer-First Design
@@ -652,3 +655,34 @@ Decision:
 Do not revise skid mechanics as part of v0.4.3.
 Action:
 Schedule a focused comparison of the implemented skid sequence against the reference crash rules before making further changes.
+
+
+## v0.4.4 — Phase Speed and Bend Controls
+Introduced:
+- Compass-bearing conversion for heading and travel displays. Simulation angles remain unchanged, while user-facing bearings use north as 0° and east as 90°.
+- Speed-change selection at the beginning of any phase, provided the vehicle has not already accelerated or decelerated during that turn.
+- Five-mph speed-change increments. Acceleration options are capped by the vehicle's configured maximum acceleration and applicable top speed. Normal braking options currently extend through 10 mph.
+- A hold-speed choice that does not consume the once-per-turn speed-change opportunity.
+- Bend choices of 15°, 30°, 45°, 60°, 75°, and 90°.
+- Bend difficulty of D1 for each 15° increment, through D6 at 90°.
+- Direction-aware previews and committed movement for every supported bend angle.
+
+### Rules Decision: Timing of Speed Changes
+Previous implementation:
+The speed-change choice was effectively treated as a first-phase or automatically consumed decision.
+
+Current implementation:
+At the beginning of each phase, the player may choose a legal speed change if no nonzero speed change has yet been committed that turn. The chosen change is applied immediately before movement for that phase. Holding speed leaves the option available in later phases.
+
+Reason:
+The reference rules permit acceleration or deceleration once per turn at the beginning of any phase, not necessarily Phase 1.
+
+### Rules Decision: Bend Angles
+Current implementation:
+The bend control offers 15° increments from 15° through 90°. Difficulty increases by one for every 15°: D1, D2, D3, D4, D5, and D6.
+
+Reason:
+This directly follows the bend difficulty ranges and gives the player the full basic bend set with a simple computer-first selector.
+
+### Deferred Review: Skid Mechanics
+Skid, fishtail, spin, rollover, and other loss-of-control movement are intentionally unchanged in v0.4.4. A focused rules and presentation review is planned for the next development discussion.

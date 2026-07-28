@@ -82,9 +82,9 @@
       car.weaponName = spec.name;
     }
   }
-  let turn=1, phase=1, started=false, selected={type:"straight",d:0,label:"Go straight"}, pendingSpeedAction="hold", locked=false;
+  let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.4.3",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.4.4",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -229,8 +229,9 @@
     if(crashMove(car,inches))return;
     let d=(mv?.d||0)+(car.direction<0&&mv?.d?1:0);
     const originalTravel=movementHeading(car);
-    if(mv?.type==="bendL")car.heading=norm(car.heading-(car.direction<0?-15:15));
-    if(mv?.type==="bendR")car.heading=norm(car.heading+(car.direction<0?-15:15));
+    const bendAngle=mv?.angle||15;
+    if(mv?.type==="bendL")car.heading=norm(car.heading-(car.direction<0?-bendAngle:bendAngle));
+    if(mv?.type==="bendR")car.heading=norm(car.heading+(car.direction<0?-bendAngle:bendAngle));
     car.crashMomentumHeading=originalTravel;
     if(!controlCheck(car,d,"maneuver")){
       // Steering changes the body heading, while the crash skid preserves pre-bend momentum.
@@ -315,24 +316,41 @@
   function canChooseManeuver(){return moveDist(player)>0 && !player.crashState;}
   function projectedSpeed(){
     if(player.changedSpeed)return player.speed;
-    if(pendingSpeedAction==="accelerate")return Math.min(player.direction<0?(player.reverseTopSpeed||Math.max(5,Math.floor(player.topSpeed/5))):player.topSpeed,player.speed+player.accel);
-    if(pendingSpeedAction==="decelerate")return Math.max(0,player.speed-5);
-    return player.speed;
+    const limit=player.direction<0?(player.reverseTopSpeed||Math.max(5,Math.floor(player.topSpeed/5))):player.topSpeed;
+    return Math.max(0,Math.min(limit,player.speed+pendingSpeedDelta));
   }
-  function setSpeedAction(action){
+  function speedChangeOptions(){
+    const options=[];
+    const maxBrake=Math.min(10,player.speed);
+    for(let delta=-maxBrake;delta<=-5;delta+=5)options.push(delta);
+    options.push(0);
+    const limit=player.direction<0?(player.reverseTopSpeed||Math.max(5,Math.floor(player.topSpeed/5))):player.topSpeed;
+    const maxAccel=Math.min(player.accel,Math.max(0,limit-player.speed));
+    for(let delta=5;delta<=maxAccel;delta+=5)options.push(delta);
+    return options;
+  }
+  function populateSpeedChoices(){
+    const select=$("speedChange");if(!select)return;
+    const options=speedChangeOptions();
+    if(!options.includes(pendingSpeedDelta))pendingSpeedDelta=0;
+    select.innerHTML=options.map(delta=>`<option value="${delta}">${delta===0?"Hold speed":delta>0?`Accelerate +${delta} mph`:`Decelerate ${delta} mph`}</option>`).join("");
+    select.value=String(pendingSpeedDelta);
+  }
+  function setSpeedDelta(delta){
     if(replayMode||locked||player.changedSpeed||!player.alive)return;
-    pendingSpeedAction=action;updateUI();draw();
+    const options=speedChangeOptions();
+    pendingSpeedDelta=options.includes(delta)?delta:0;updateUI();draw();
   }
   function applyPendingSpeed(){
-    if(player.changedSpeed)return;
+    if(player.changedSpeed||pendingSpeedDelta===0)return;
     const before=player.speed, after=projectedSpeed();
     player.speed=after;player.changedSpeed=true;
     if(after===0)endCrashAtHalt(player);
-    if(after>before)log(`${player.name} accelerates to ${after} mph.`);
-    else if(after<before)log(`${player.name} decelerates to ${after} mph.`);
-    else log(`${player.name} holds speed at ${after} mph.`);
+    if(after>before)log(`${player.name} accelerates ${after-before} mph to ${after} mph.`);
+    else if(after<before)log(`${player.name} decelerates ${before-after} mph to ${after} mph.`);
+    pendingSpeedDelta=0;
   }
-  function setSelected(type,d,label){if(replayMode||!canChooseManeuver())return;selected={type,d,label};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}. Speed after commit: ${projectedSpeed()} mph.`;draw()}
+  function setSelected(type,d,label,angle=0){if(replayMode||!canChooseManeuver())return;selected={type,d,label,angle};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}. Speed after commit: ${projectedSpeed()} mph.`;draw()}
   function updateUI(){
     $("turnNum").textContent=turn;$("phaseNum").textContent=phase;$("speed").textContent=`${player.direction<0?"R ":""}${player.speed}`;$("handling").textContent=player.handling;
     $("ammo").textContent=player.ammo;$("weaponDP").textContent=player.weaponDP;
@@ -340,15 +358,12 @@
     $("phasebar").innerHTML=[1,2,3,4,5].map(p=>`<div class="phase ${p===phase?'active':''}">${p}</div>`).join("");
     const controlsLocked=replayMode||locked||!player.alive;
     const speedLocked=controlsLocked||player.changedSpeed;
-    $("accel").disabled=speedLocked||player.speed>=player.topSpeed;
-    $("brake").disabled=speedLocked||player.speed<=0;
-    if($("holdSpeed"))$("holdSpeed").disabled=speedLocked;
-    [["accel","accelerate"],["brake","decelerate"],["holdSpeed","hold"]].forEach(([id,action])=>{if($(id))$(id).classList.toggle("selected",!player.changedSpeed&&pendingSpeedAction===action)});
-    $("accel").textContent=`Accelerate +${player.accel}`;
+    populateSpeedChoices();
+    if($("speedChange"))$("speedChange").disabled=speedLocked;
     if($("reverse")){$("reverse").disabled=controlsLocked||player.speed!==0||player.stoppedTurns<1;$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
     $("fire").disabled=controlsLocked||player.firedThisPhase||player.ammo<=0;
     const maneuverLocked=controlsLocked||!canChooseManeuver();
-    ["left15","right15","driftL","driftR","straight"].forEach(id=>{if($(id))$(id).disabled=maneuverLocked});
+    ["bendLeft","bendRight","bendAngle","driftL","driftR","straight"].forEach(id=>{if($(id))$(id).disabled=maneuverLocked});
     $("commit").disabled=controlsLocked;
     if(!controlsLocked){
       const reason=player.crashState?`Maneuvers unavailable during ${player.crashState.type}.`:moveDist(player)<=0?`No vehicle movement is scheduled in Phase ${phase}.`:`Choose a maneuver and speed change, then commit.`;
@@ -360,18 +375,19 @@
     if(!$("inspector"))return;
     const car=$("inspectCar")?.value==="ai"?ai:player;
     const heading=norm(car.heading), travel=movementHeading(car);
+    const headingBearing=norm(heading+90), travelBearing=norm(travel+90);
     const crashType=car.crashState?.type||"normal";
     const crash=`${crashType}${car.crashState?.face?` / ${car.crashState.face}`:""}`;
     const statusClass={normal:"statusNormal",skid:"statusSkid",spin:"statusSpin",roll:"statusRoll",vault:"statusVault"}[crashType]||"statusCrash";
     const frameText=replay.frames.length?`${Math.max(0,replayIndex)+1} / ${replay.frames.length}`:"0 / 0";
     $("inspector").innerHTML=`
       <div><b>Position</b>${car.x.toFixed(1)}, ${car.y.toFixed(1)}</div><div><b>Speed</b>${car.speed} mph</div>
-      <div><b>Heading</b>${heading.toFixed(0)}°</div><div><b>Momentum</b>${travel.toFixed(0)}°</div>
+      <div><b>Heading</b>${headingBearing.toFixed(0)}°</div><div><b>Momentum</b>${travelBearing.toFixed(0)}°</div>
       <div><b>Handling</b>${car.handling}</div><div><b>HC</b>${car.hc}</div>
       <div><b>Crash state</b><span class="statusBadge ${statusClass}">${crash}</span></div><div><b>Internal</b>${car.internal}</div>
       <div><b>Direction</b>${car.direction<0?"reverse":"forward"}</div><div><b>Replay</b>${replayMode?"REPLAY":"LIVE"} · ${frameText}</div>
       <div><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="Internal pseudo-random generator state; useful only for exact replay debugging"><b>RNG state</b>${rngState}</div>
-      <div class="directionCompass"><b>Vehicle direction</b><span class="compassRose">N</span><span class="compassCar" style="transform:translate(-50%,-50%) rotate(${heading}deg)">▲</span><i class="momentumArrow" style="transform:translate(-50%,-88%) rotate(${travel}deg)"></i><div class="compassReadout"><span><strong>Car faces</strong>${heading.toFixed(0)}°</span><span><strong>Travel path</strong>${travel.toFixed(0)}°</span></div><span class="compassNote">Blue car = body heading · Gold arrow = actual movement</span></div>`;
+      <div class="directionCompass"><b>Vehicle direction</b><span class="compassRose">N</span><span class="compassCar" style="transform:translate(-50%,-50%) rotate(${headingBearing}deg)">▲</span><i class="momentumArrow" style="transform:translate(-50%,-88%) rotate(${travelBearing}deg)"></i><div class="compassReadout"><span><strong>Car faces</strong>${headingBearing.toFixed(0)}°</span><span><strong>Travel path</strong>${travelBearing.toFixed(0)}°</span></div><span class="compassNote">Blue car = body heading · Gold arrow = actual movement</span></div>`;
   }
   function checkEnd(){
     if(!player.alive||!ai.alive){
@@ -402,11 +418,11 @@
         c.stoppedTurns=c.speed===0?c.stoppedTurns+1:0;
         c.firePenalty=0;
       });
-      turn++;phase=1;player.changedSpeed=ai.changedSpeed=false;pendingSpeedAction="hold";
+      turn++;phase=1;player.changedSpeed=ai.changedSpeed=false;pendingSpeedDelta=0;
       log(`— Turn ${turn} begins. Handling recovered. —`,"warn");
     } else phase++;
     player.firedThisPhase=ai.firedThisPhase=false;
-    selected={type:"straight",d:0,label:"Go straight"};
+    selected={type:"straight",d:0,angle:0,label:"Go straight"};
     $("previewText").textContent="Choose a maneuver and speed change, then commit.";
     snapshot("Movement resolved");updateUI();draw();checkEnd();
   }
@@ -485,8 +501,9 @@
     if(!started||!player.alive||player.crashState)return;
     const inches=moveDist(player);if(!inches)return;
     let h=player.heading;
-    if(selected.type==="bendL")h+=player.direction<0?15:-15;
-    if(selected.type==="bendR")h+=player.direction<0?-15:15;
+    const previewAngle=selected.angle||15;
+    if(selected.type==="bendL")h+=player.direction<0?previewAngle:-previewAngle;
+    if(selected.type==="bendR")h+=player.direction<0?-previewAngle:previewAngle;
     h=norm(h);
     const travel=norm(h+(player.direction<0?180:0));
     let x=player.x+Math.cos(rad(travel))*inches*SCALE,y=player.y+Math.sin(rad(travel))*inches*SCALE;
@@ -499,19 +516,19 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.3",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
-  $("left15").onclick=()=>setSelected("bendL",1,"15° left bend");
-  $("right15").onclick=()=>setSelected("bendR",1,"15° right bend");
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.4",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  function chooseBend(side){const angle=Number($("bendAngle").value||15),d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle)}
+  $("bendLeft").onclick=()=>chooseBend("left");
+  $("bendRight").onclick=()=>chooseBend("right");
+  $("bendAngle").onchange=()=>{if(selected.type==="bendL")chooseBend("left");else if(selected.type==="bendR")chooseBend("right");else draw()};
   $("driftL").onclick=()=>setSelected("driftL",1,"left drift");
   $("driftR").onclick=()=>setSelected("driftR",1,"right drift");
   $("straight").onclick=()=>setSelected("straight",0,"go straight");
   $("commit").onclick=advance;
-  $("accel").onclick=()=>setSpeedAction("accelerate");
-  $("brake").onclick=()=>setSpeedAction("decelerate");
-  if($("holdSpeed"))$("holdSpeed").onclick=()=>setSpeedAction("hold");
+  if($("speedChange"))$("speedChange").onchange=e=>setSpeedDelta(Number(e.target.value));
   if($("reverse"))$("reverse").onclick=()=>{
     if(player.speed!==0||player.stoppedTurns<1){log(`${player.name} must remain stopped for a full turn before changing direction.`,"bad");return}
-    player.direction*=-1;player.changedSpeed=true;pendingSpeedAction="hold";
+    player.direction*=-1;player.changedSpeed=true;pendingSpeedDelta=0;
     log(`${player.name} selects ${player.direction<0?"reverse":"forward"} gear.`,"warn");updateUI();draw();
   };
   $("fire").onclick=()=>{fire(player,ai);updateUI();draw();checkEnd()};
@@ -528,7 +545,7 @@
   if($("logFilter"))$("logFilter").onchange=applyLogFilter;if($("inspectCar"))$("inspectCar").onchange=updateInspector;
   if($("replayStart"))$("replayStart").onclick=()=>{stopReplay();restoreFrame(0,{autoResume:false})};if($("replayBack"))$("replayBack").onclick=()=>{stopReplay();restoreFrame(replayIndex-1,{autoResume:false})};if($("replayForward"))$("replayForward").onclick=()=>{stopReplay();restoreFrame(replayIndex+1)};if($("replayPlay"))$("replayPlay").onclick=toggleReplayPlay;if($("replaySlider"))$("replaySlider").oninput=e=>{stopReplay();restoreFrame(Number(e.target.value))};if($("exportReplay"))$("exportReplay").onclick=exportReplay;if($("importReplay"))$("importReplay").onchange=e=>{if(e.target.files[0])importReplayFile(e.target.files[0])};
   function toggleHotkeys(show){const o=$("hotkeyOverlay");if(!o)return;o.style.display=(show===undefined?(o.style.display==="none"?"flex":"none"):(show?"flex":"none"))}
-  document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w")$("accel").click();else if(k==="arrowdown"||k==="x")$("brake").click();else if(k==="c"&&$("holdSpeed"))$("holdSpeed").click();else if(k==="arrowleft"||k==="q")$("left15").click();else if(k==="arrowright"||k==="e")$("right15").click();else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="v"&&$("reverse"))$("reverse").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
+  document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w"){const o=speedChangeOptions(),i=o.indexOf(pendingSpeedDelta);setSpeedDelta(o[Math.min(o.length-1,Math.max(0,i)+1)])}else if(k==="arrowdown"||k==="x"){const o=speedChangeOptions(),i=o.indexOf(pendingSpeedDelta);setSpeedDelta(o[Math.max(0,i<0?0:i-1)])}else if(k==="c")setSpeedDelta(0);else if(k==="arrowleft"||k==="q")$("bendLeft").click();else if(k==="arrowright"||k==="e")$("bendRight").click();else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="v"&&$("reverse"))$("reverse").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
   if($("closeHotkeys"))$("closeHotkeys").onclick=()=>toggleHotkeys(false);
   updateUI();fitArena();draw();
 })();

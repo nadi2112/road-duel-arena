@@ -1,3 +1,15 @@
+## v0.4.4 — Phase Speed & Bend Controls
+
+- Corrected the inspector and compass to convert canvas headings to compass bearings (north = 0°, east = 90°).
+- Added beginning-of-phase speed selection in 5 mph increments.
+- A zero/hold selection no longer consumes the once-per-turn speed change.
+- Limited acceleration choices to each vehicle's configured acceleration and top-speed limits.
+- Added normal deceleration choices of 5 or 10 mph where available.
+- Added bend angles of 15°, 30°, 45°, 60°, 75°, and 90° with D1–D6 difficulty.
+- Updated bend previews and committed movement to use the selected angle.
+- Renamed the maintained TDD to `docs/Road_Duel_Arena_TDD.md`.
+- Left skid mechanics unchanged for the next focused review.
+
 # Changelog
 
 ## v0.4.3 — Driving Controls & Readability

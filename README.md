@@ -1,15 +1,16 @@
-# Road Duel Arena v0.4.3
+# Road Duel Arena v0.4.4
 
 Open `index.html` directly in a modern browser.
 
-## v0.4.3 highlights
-- Locked the arena viewport to a square 1:1 aspect ratio at every responsive breakpoint.
-- Removed the misleading Resume Live button; reaching the newest replay frame automatically restores live mode.
-- Reworked the heading/momentum inspector into a labeled vehicle-facing and actual-travel diagram.
-- Speed changes are now editable selections—accelerate, hold, or decelerate—until Commit Action is pressed.
-- Maneuver buttons are enabled only during scheduled movement and are disabled during crash/loss-of-control states.
-- Skid mechanics are intentionally unchanged pending a dedicated rules review.
-- Replay exports now identify themselves as version `0.4.3`.
+## v0.4.4 highlights
+
+- Correct compass bearings: 0° is north and 90° is east while simulation angles remain canvas-native.
+- Acceleration and deceleration may be selected at the beginning of any phase until a nonzero change is committed that turn.
+- Speed choices use 5 mph increments; acceleration is capped by the vehicle design and normal braking is offered through 10 mph.
+- Bend choices now include 15°, 30°, 45°, 60°, 75°, and 90°, with D1 through D6 handling difficulty.
+- The movement preview reflects the selected bend angle before commitment.
+- Skid mechanics remain unchanged pending a dedicated rules review.
+- Replay exports identify themselves as version `0.4.4`.
 
 ## Existing major systems
 - Garage and saved vehicle designs
