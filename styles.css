@@ -94,3 +94,42 @@ header nav{display:flex;gap:8px}.hero{min-height:440px;padding:55px;border:1px s
 .momentumArrow{height:25px;border-left:3px dashed #ffca69}
 .momentumArrow:after{content:"➤";position:absolute;left:-8px;top:-10px;color:#ffca69;font-style:normal;font-size:14px}
 .compassLegend{position:absolute;left:0;right:0;bottom:5px;color:#8e99aa;font-size:10px}
+
+/* v0.4.2 persistent combat-log workspace */
+main{max-width:1800px}
+#arena{grid-column:1/-1}
+#arena.active{grid-template-columns:minmax(620px,1fr) 340px 360px}
+#arena .logColumn{min-width:0;display:flex;overflow:hidden}
+#arena .logPanel{display:flex;flex-direction:column;min-height:0;width:100%}
+#arena .logPanel #log{height:auto;min-height:0;flex:1}
+
+/* Keep the arena useful before stacking the interface completely. */
+@media(max-width:1380px){
+  #arena.active{grid-template-columns:minmax(600px,1fr) 330px}
+  #arena .logColumn{grid-column:1/-1;min-height:260px;overflow:visible}
+  #arena .logPanel #log{height:220px;flex:none}
+}
+@media(max-width:1050px){
+  #arena.active{display:block;height:auto}
+  #arena .sidebar{overflow:visible;margin-top:12px}
+  #arena .logColumn{display:block;margin-top:12px;min-height:0}
+  #arena .logPanel #log{height:260px}
+}
+
+
+/* v0.4.3 square arena and clearer driving controls */
+#arena #gameWrap{width:100%;height:auto;aspect-ratio:1 / 1;align-self:flex-start;flex:none}
+#arena canvas{width:100%;height:100%;aspect-ratio:1 / 1}
+.speedChoice.selected{background:#725719;border-color:#f2b84b;box-shadow:0 0 0 2px #f2b84b33;color:#fff4d0}
+.directionCompass{height:176px;overflow:visible}
+.directionCompass:after{width:76px;height:76px;top:41px}
+.compassRose{top:25px}
+.compassCar{position:absolute;z-index:3;left:50%;top:80px;transform-origin:50% 50%;color:#6fc6ff;font-size:24px;line-height:1;text-shadow:0 0 8px #6fc6ff88}
+.momentumArrow{top:80px;height:39px;transform-origin:50% 88%;border-left:4px solid #ffca69}
+.momentumArrow:after{content:"➤";left:-9px;top:-12px;font-size:17px}
+.compassReadout{position:absolute;left:7px;right:7px;top:123px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.compassReadout span{background:#1c222b;border:1px solid #343d49;border-radius:6px;padding:5px;font-size:11px}
+.compassReadout strong{display:block;color:#aeb8c7;font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+.compassNote{position:absolute;left:6px;right:6px;bottom:4px;color:#8e99aa;font-size:9px}
+@media(max-width:1380px){#arena #gameWrap{max-width:min(100%,72vh)}}
+@media(max-width:1050px){.arenaViewport{height:auto;min-height:0}#arena #gameWrap{max-width:min(100%,82vh);margin-inline:auto}}

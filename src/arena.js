@@ -4,7 +4,7 @@
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   const SCALE = 18; // pixels per tabletop inch (visual approximation)
-  const arena = {x:55,y:45,w:940,h:610};
+  const arena = {x:45,y:45,w:810,h:810};
   // Exact movement schedule from the classic Movement Chart for 0-100 mph.
   // Values are total inches moved in each of the five phases.
   // At odd speeds above 50 mph, the half-move is ADDITIONAL to the phase's
@@ -82,9 +82,9 @@
       car.weaponName = spec.name;
     }
   }
-  let turn=1, phase=1, started=false, selected={type:"straight",d:0,label:"Go straight"}, locked=false;
+  let turn=1, phase=1, started=false, selected={type:"straight",d:0,label:"Go straight"}, pendingSpeedAction="hold", locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.4.1",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.4.3",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -307,27 +307,53 @@
     $("replaySlider").max=Math.max(0,replay.frames.length-1);
     $("replaySlider").value=Math.max(0,replayIndex);
     $("replayPosition").textContent=replayMode?`Replay · ${replayIndex+1}/${replay.frames.length}`:`LIVE · ${replay.frames.length} frames`;
-    if($("resumeLive")){
-      $("resumeLive").disabled=!replayMode||replayReadOnly;
-      $("resumeLive").textContent=replayReadOnly?"Imported (view only)":"Resume Live";
-    }
   }
   function exportReplay(){const payload={...replay,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`road-duel-replay-T${turn}-P${phase}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),500)}
   function importReplayFile(file){const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!Array.isArray(data.frames)||!data.frames.length)throw new Error("No replay frames");replay=data;rngSeed=data.seed||1;rngState=rngSeed;replayReadOnly=true;locked=true;restoreFrame(0,{autoResume:false});log("Imported replay loaded. Use replay controls to inspect it.","warn","movement")}catch(e){toast(`Replay import failed: ${e.message}`)}};reader.readAsText(file)}
   function stopReplay(){if(replayTimer){clearInterval(replayTimer);replayTimer=null}if($("replayPlay"))$("replayPlay").textContent="Play"}
   function toggleReplayPlay(){if(replayTimer){stopReplay();return}if(!replay.frames.length)return;if(!replayMode&&!replayReadOnly)restoreFrame(0,{autoResume:false});$("replayPlay").textContent="Pause";replayTimer=setInterval(()=>{if(replayIndex>=replay.frames.length-1){stopReplay();if(!replayReadOnly)resumeLive();return}restoreFrame(replayIndex+1)},500)}
-  function setSelected(type,d,label){if(replayMode)return;selected={type,d,label};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}.`;draw()}
+  function canChooseManeuver(){return moveDist(player)>0 && !player.crashState;}
+  function projectedSpeed(){
+    if(player.changedSpeed)return player.speed;
+    if(pendingSpeedAction==="accelerate")return Math.min(player.direction<0?(player.reverseTopSpeed||Math.max(5,Math.floor(player.topSpeed/5))):player.topSpeed,player.speed+player.accel);
+    if(pendingSpeedAction==="decelerate")return Math.max(0,player.speed-5);
+    return player.speed;
+  }
+  function setSpeedAction(action){
+    if(replayMode||locked||player.changedSpeed||!player.alive)return;
+    pendingSpeedAction=action;updateUI();draw();
+  }
+  function applyPendingSpeed(){
+    if(player.changedSpeed)return;
+    const before=player.speed, after=projectedSpeed();
+    player.speed=after;player.changedSpeed=true;
+    if(after===0)endCrashAtHalt(player);
+    if(after>before)log(`${player.name} accelerates to ${after} mph.`);
+    else if(after<before)log(`${player.name} decelerates to ${after} mph.`);
+    else log(`${player.name} holds speed at ${after} mph.`);
+  }
+  function setSelected(type,d,label){if(replayMode||!canChooseManeuver())return;selected={type,d,label};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}. Speed after commit: ${projectedSpeed()} mph.`;draw()}
   function updateUI(){
     $("turnNum").textContent=turn;$("phaseNum").textContent=phase;$("speed").textContent=`${player.direction<0?"R ":""}${player.speed}`;$("handling").textContent=player.handling;
     $("ammo").textContent=player.ammo;$("weaponDP").textContent=player.weaponDP;
     $("armor").innerHTML=Object.entries(player.armor).map(([k,v])=>`<div>${k}<strong>${v}</strong></div>`).join("");
     $("phasebar").innerHTML=[1,2,3,4,5].map(p=>`<div class="phase ${p===phase?'active':''}">${p}</div>`).join("");
     const controlsLocked=replayMode||locked||!player.alive;
-    $("accel").disabled=controlsLocked||player.changedSpeed||player.speed>=player.topSpeed;
-    $("brake").disabled=controlsLocked||player.changedSpeed||player.speed<=0;
+    const speedLocked=controlsLocked||player.changedSpeed;
+    $("accel").disabled=speedLocked||player.speed>=player.topSpeed;
+    $("brake").disabled=speedLocked||player.speed<=0;
+    if($("holdSpeed"))$("holdSpeed").disabled=speedLocked;
+    [["accel","accelerate"],["brake","decelerate"],["holdSpeed","hold"]].forEach(([id,action])=>{if($(id))$(id).classList.toggle("selected",!player.changedSpeed&&pendingSpeedAction===action)});
+    $("accel").textContent=`Accelerate +${player.accel}`;
     if($("reverse")){$("reverse").disabled=controlsLocked||player.speed!==0||player.stoppedTurns<1;$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
     $("fire").disabled=controlsLocked||player.firedThisPhase||player.ammo<=0;
-    ["left15","right15","driftL","driftR","straight","commit"].forEach(id=>{if($(id))$(id).disabled=controlsLocked});
+    const maneuverLocked=controlsLocked||!canChooseManeuver();
+    ["left15","right15","driftL","driftR","straight"].forEach(id=>{if($(id))$(id).disabled=maneuverLocked});
+    $("commit").disabled=controlsLocked;
+    if(!controlsLocked){
+      const reason=player.crashState?`Maneuvers unavailable during ${player.crashState.type}.`:moveDist(player)<=0?`No vehicle movement is scheduled in Phase ${phase}.`:`Choose a maneuver and speed change, then commit.`;
+      if(!canChooseManeuver())$("previewText").textContent=reason;
+    }
     updateInspector();updateReplayUI();
   }
   function updateInspector(){
@@ -345,7 +371,7 @@
       <div><b>Crash state</b><span class="statusBadge ${statusClass}">${crash}</span></div><div><b>Internal</b>${car.internal}</div>
       <div><b>Direction</b>${car.direction<0?"reverse":"forward"}</div><div><b>Replay</b>${replayMode?"REPLAY":"LIVE"} · ${frameText}</div>
       <div><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="Internal pseudo-random generator state; useful only for exact replay debugging"><b>RNG state</b>${rngState}</div>
-      <div class="directionCompass"><b>Heading / momentum</b><span class="compassRose">N</span><i class="headingArrow" style="transform:translate(-50%,-88%) rotate(${heading}deg)"></i><i class="momentumArrow" style="transform:translate(-50%,-88%) rotate(${travel}deg)"></i><span class="compassLegend">body&nbsp;◆ &nbsp; momentum&nbsp;➤</span></div>`;
+      <div class="directionCompass"><b>Vehicle direction</b><span class="compassRose">N</span><span class="compassCar" style="transform:translate(-50%,-50%) rotate(${heading}deg)">▲</span><i class="momentumArrow" style="transform:translate(-50%,-88%) rotate(${travel}deg)"></i><div class="compassReadout"><span><strong>Car faces</strong>${heading.toFixed(0)}°</span><span><strong>Travel path</strong>${travel.toFixed(0)}°</span></div><span class="compassNote">Blue car = body heading · Gold arrow = actual movement</span></div>`;
   }
   function checkEnd(){
     if(!player.alive||!ai.alive){
@@ -356,11 +382,12 @@
   }
   function advance(){
     if(locked||!started)return;
-    player.maneuverD=selected.d;
+    applyPendingSpeed();
+    player.maneuverD=canChooseManeuver()?selected.d:0;
     const pm=moveDist(player), am=moveDist(ai);
     // Faster car moves first; equal speed gives player initiative in prototype.
-    if(ai.speed>player.speed){if(am)aiAct();if(pm)performMove(player,selected)}
-    else {if(pm)performMove(player,selected);if(am)aiAct()}
+    if(ai.speed>player.speed){if(am)aiAct();if(pm)performMove(player,canChooseManeuver()?selected:{type:"straight",d:0,label:"Go straight"})}
+    else {if(pm)performMove(player,canChooseManeuver()?selected:{type:"straight",d:0,label:"Go straight"});if(am)aiAct()}
     log(`Turn ${turn}, Phase ${phase}: movement resolved.`);
     checkEnd();
     if(phase===5){
@@ -375,12 +402,12 @@
         c.stoppedTurns=c.speed===0?c.stoppedTurns+1:0;
         c.firePenalty=0;
       });
-      turn++;phase=1;player.changedSpeed=ai.changedSpeed=false;
+      turn++;phase=1;player.changedSpeed=ai.changedSpeed=false;pendingSpeedAction="hold";
       log(`— Turn ${turn} begins. Handling recovered. —`,"warn");
     } else phase++;
     player.firedThisPhase=ai.firedThisPhase=false;
     selected={type:"straight",d:0,label:"Go straight"};
-    $("previewText").textContent="Choose a maneuver, then commit it.";
+    $("previewText").textContent="Choose a maneuver and speed change, then commit.";
     snapshot("Movement resolved");updateUI();draw();checkEnd();
   }
   function drawArena(){
@@ -455,10 +482,14 @@
     if(performance.now()<car.crashBannerUntil){ctx.fillStyle="#ff4d5f";ctx.font="bold 16px sans-serif";ctx.fillText("LOSS OF CONTROL",car.x,car.y-38)}
   }
   function drawPreview(){
-    if(!started||!player.alive)return;
+    if(!started||!player.alive||player.crashState)return;
     const inches=moveDist(player);if(!inches)return;
-    let h=player.heading;if(selected.type==="bendL")h-=15;if(selected.type==="bendR")h+=15;
-    let x=player.x+Math.cos(rad(h))*inches*SCALE,y=player.y+Math.sin(rad(h))*inches*SCALE;
+    let h=player.heading;
+    if(selected.type==="bendL")h+=player.direction<0?15:-15;
+    if(selected.type==="bendR")h+=player.direction<0?-15:15;
+    h=norm(h);
+    const travel=norm(h+(player.direction<0?180:0));
+    let x=player.x+Math.cos(rad(travel))*inches*SCALE,y=player.y+Math.sin(rad(travel))*inches*SCALE;
     if(selected.type==="driftL"){x+=Math.cos(rad(h+90))*(-.25*SCALE);y+=Math.sin(rad(h+90))*(-.25*SCALE)}
     if(selected.type==="driftR"){x+=Math.cos(rad(h+90))*(.25*SCALE);y+=Math.sin(rad(h+90))*(.25*SCALE)}
     ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle="#f2b84b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(player.x,player.y);ctx.lineTo(x,y);ctx.stroke();
@@ -468,18 +499,19 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.1",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.3",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
   $("left15").onclick=()=>setSelected("bendL",1,"15° left bend");
   $("right15").onclick=()=>setSelected("bendR",1,"15° right bend");
   $("driftL").onclick=()=>setSelected("driftL",1,"left drift");
   $("driftR").onclick=()=>setSelected("driftR",1,"right drift");
   $("straight").onclick=()=>setSelected("straight",0,"go straight");
   $("commit").onclick=advance;
-  $("accel").onclick=()=>{if(!player.changedSpeed){player.speed=Math.min(player.direction<0?(player.reverseTopSpeed||Math.max(5,Math.floor(player.topSpeed/5))):player.topSpeed,player.speed+player.accel);player.changedSpeed=true;log(`${player.name} accelerates to ${player.speed} mph.`);updateUI();draw()}};
-  $("brake").onclick=()=>{if(!player.changedSpeed){player.speed=Math.max(0,player.speed-5);player.changedSpeed=true;if(player.speed===0)endCrashAtHalt(player);log(`${player.name} decelerates to ${player.speed} mph.`);updateUI();draw()}};
+  $("accel").onclick=()=>setSpeedAction("accelerate");
+  $("brake").onclick=()=>setSpeedAction("decelerate");
+  if($("holdSpeed"))$("holdSpeed").onclick=()=>setSpeedAction("hold");
   if($("reverse"))$("reverse").onclick=()=>{
     if(player.speed!==0||player.stoppedTurns<1){log(`${player.name} must remain stopped for a full turn before changing direction.`,"bad");return}
-    player.direction*=-1;player.changedSpeed=true;
+    player.direction*=-1;player.changedSpeed=true;pendingSpeedAction="hold";
     log(`${player.name} selects ${player.direction<0?"reverse":"forward"} gear.`,"warn");updateUI();draw();
   };
   $("fire").onclick=()=>{fire(player,ai);updateUI();draw();checkEnd()};
@@ -494,9 +526,9 @@
   canvas.addEventListener("pointermove",e=>{if(!camera.dragging)return;const r=canvas.getBoundingClientRect();camera.x+=(e.clientX-camera.lastX)*W/r.width;camera.y+=(e.clientY-camera.lastY)*H/r.height;camera.lastX=e.clientX;camera.lastY=e.clientY;draw()});
   canvas.addEventListener("pointerup",e=>{camera.dragging=false;canvas.classList.remove("dragging");try{canvas.releasePointerCapture(e.pointerId)}catch{}});
   if($("logFilter"))$("logFilter").onchange=applyLogFilter;if($("inspectCar"))$("inspectCar").onchange=updateInspector;
-  if($("replayStart"))$("replayStart").onclick=()=>{stopReplay();restoreFrame(0,{autoResume:false})};if($("replayBack"))$("replayBack").onclick=()=>{stopReplay();restoreFrame(replayIndex-1,{autoResume:false})};if($("replayForward"))$("replayForward").onclick=()=>{stopReplay();restoreFrame(replayIndex+1)};if($("replayPlay"))$("replayPlay").onclick=toggleReplayPlay;if($("replaySlider"))$("replaySlider").oninput=e=>{stopReplay();restoreFrame(Number(e.target.value))};if($("resumeLive"))$("resumeLive").onclick=resumeLive;if($("exportReplay"))$("exportReplay").onclick=exportReplay;if($("importReplay"))$("importReplay").onchange=e=>{if(e.target.files[0])importReplayFile(e.target.files[0])};
+  if($("replayStart"))$("replayStart").onclick=()=>{stopReplay();restoreFrame(0,{autoResume:false})};if($("replayBack"))$("replayBack").onclick=()=>{stopReplay();restoreFrame(replayIndex-1,{autoResume:false})};if($("replayForward"))$("replayForward").onclick=()=>{stopReplay();restoreFrame(replayIndex+1)};if($("replayPlay"))$("replayPlay").onclick=toggleReplayPlay;if($("replaySlider"))$("replaySlider").oninput=e=>{stopReplay();restoreFrame(Number(e.target.value))};if($("exportReplay"))$("exportReplay").onclick=exportReplay;if($("importReplay"))$("importReplay").onchange=e=>{if(e.target.files[0])importReplayFile(e.target.files[0])};
   function toggleHotkeys(show){const o=$("hotkeyOverlay");if(!o)return;o.style.display=(show===undefined?(o.style.display==="none"?"flex":"none"):(show?"flex":"none"))}
-  document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w")$("accel").click();else if(k==="arrowdown"||k==="x")$("brake").click();else if(k==="arrowleft"||k==="q")$("left15").click();else if(k==="arrowright"||k==="e")$("right15").click();else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="v"&&$("reverse"))$("reverse").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
+  document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w")$("accel").click();else if(k==="arrowdown"||k==="x")$("brake").click();else if(k==="c"&&$("holdSpeed"))$("holdSpeed").click();else if(k==="arrowleft"||k==="q")$("left15").click();else if(k==="arrowright"||k==="e")$("right15").click();else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="v"&&$("reverse"))$("reverse").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
   if($("closeHotkeys"))$("closeHotkeys").onclick=()=>toggleHotkeys(false);
   updateUI();fitArena();draw();
 })();

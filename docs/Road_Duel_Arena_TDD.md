@@ -1,8 +1,8 @@
 Road Duel Arena
 Game Design & Technical Design Document
-Document Version: 1.0
-Game Version: v0.4.1
-Next Milestone: v0.4.2
+Document Version: 1.2
+Game Version: v0.4.3
+Next Milestone: v0.5.0
 
 1. Project Overview
 Project Goals
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.4.1.
+The current stable baseline is v0.4.3.
 Major implemented systems include:
 Arena movement
 Basic vehicle combat
@@ -77,12 +77,12 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The next planned release is v0.4.2.
-Its primary goals are:
-Give the combat log a dedicated, permanently visible column.
-Correct the reverse-gear movement preview so it appears behind the vehicle.
-Improve replay reliability and presentation.
-Perform general interface cleanup.
+The v0.4.3 milestone is complete.
+Completed goals:
+Gave the combat log a dedicated, permanently visible column on wide screens.
+Corrected the reverse-gear movement preview so it appears behind the vehicle.
+Preserved responsive layouts for narrower browser windows.
+Updated replay version metadata and release documentation.
 
 2. Design Philosophy
 Computer-First Design
@@ -506,13 +506,13 @@ Record any resulting design decision in Section 4 or Section 5.
 
 # 8. Future Roadmap
 ## Near-Term
-### v0.4.2
-Planned work:
+### v0.4.2 — Completed
+Delivered:
 Dedicated combat-log column
 Correct reverse movement preview
-Replay polish
+Responsive arena/control/log layout
+Replay metadata update
 Interface cleanup
-General bug fixes
 ## Maneuver Expansion
 Implement all applicable maneuvers from the reference rules.
 Work includes:
@@ -594,14 +594,14 @@ Reverse gear works, but the dashed preview appears in the wrong direction.
 Decision:
 Keep the reverse mechanic and correct only the preview rendering.
 Action:
-Schedule the fix for v0.4.2.
+Fixed in v0.4.2 by drawing the preview along effective travel direction.
 ## v0.4.1
 Observation:
 The combat log contains important information but is too easy to lose while scrolling.
 Decision:
 Make the combat log a permanent part of the main arena layout.
 Action:
-Add a dedicated log column in v0.4.2.
+Completed in v0.4.2 with a persistent third column and responsive fallback.
 ## Ongoing Playtest Priorities
 Future testing should evaluate:
 Whether vehicle movement is understandable
@@ -612,3 +612,43 @@ Whether weapon results are clearly reported
 Whether the interface keeps essential information visible
 Whether replay accurately reproduces events
 Whether new features preserve existing behavior
+
+
+## v0.4.3 — Driving Controls and Readability
+Introduced:
+- A square 1:1 arena viewport that scales without geometric distortion.
+- Editable pre-commit speed choices: accelerate, hold speed, or decelerate.
+- Phase-aware maneuver button availability.
+- Crash-state maneuver lockout.
+- A redesigned heading-and-travel diagram with explicit labels and numeric bearings.
+- Automatic live-mode restoration at the newest replay frame without a separate Resume Live button.
+
+### Interface Decision: Arena Aspect Ratio
+Previous behavior:
+The arena canvas stretched to fill its container and could become wider or taller as the browser changed shape.
+Current behavior:
+The visible arena remains square at every layout breakpoint. The canvas and CSS viewport both use a 1:1 aspect ratio.
+Reason:
+Vehicle shapes, angles, movement distances, and arena geometry should not be visually distorted by window size.
+
+### Interface Decision: Pending Speed Change
+Previous behavior:
+Accelerate or decelerate immediately changed speed and locked the decision before the phase was committed.
+Current behavior:
+The player may select accelerate, hold speed, or decelerate and revise the selection until Commit Action. The selected change is applied at the start of commitment, before phase movement.
+Reason:
+This preserves the beginning-of-phase speed decision while allowing normal computer-interface correction before final submission.
+
+### Interface Decision: Maneuver Availability
+Current behavior:
+Maneuver buttons are enabled only when the movement chart schedules movement for the player's vehicle and the vehicle is under control. They are disabled during skids and other forced crash movement. Commit remains available so a no-movement phase can advance.
+Reason:
+Unavailable actions should be visibly unavailable rather than accepted and silently ignored.
+
+### Playtest Note: Skids
+Observation:
+The current skid implementation may still need rules review.
+Decision:
+Do not revise skid mechanics as part of v0.4.3.
+Action:
+Schedule a focused comparison of the implemented skid sequence against the reference crash rules before making further changes.

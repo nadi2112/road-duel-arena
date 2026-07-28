@@ -1,26 +1,27 @@
-# Road Duel Arena v0.4.1
+# Road Duel Arena v0.4.3
 
 Open `index.html` directly in a modern browser.
 
-## Added
-- Exact Control Table for 0–100 mph
-- Speed and difficulty Crash Table modifiers
-- Crash Tables 1 and 2
-- Skids, fishtails, spinouts, rolls, burning rolls, and vaults
-- Active center barriers as D3 hazards
-- Keyboard-first controls and H-key help overlay
+## v0.4.3 highlights
+- Locked the arena viewport to a square 1:1 aspect ratio at every responsive breakpoint.
+- Removed the misleading Resume Live button; reaching the newest replay frame automatically restores live mode.
+- Reworked the heading/momentum inspector into a labeled vehicle-facing and actual-travel diagram.
+- Speed changes are now editable selections—accelerate, hold, or decelerate—until Commit Action is pressed.
+- Maneuver buttons are enabled only during scheduled movement and are disabled during crash/loss-of-control states.
+- Skid mechanics are intentionally unchanged pending a dedicated rules review.
+- Replay exports now identify themselves as version `0.4.3`.
+
+## Existing major systems
+- Garage and saved vehicle designs
+- Phase-based movement, forward and reverse gear
+- Handling, control checks, crash tables, skids, spins, rolls, and vaults
+- Basic combat and directional armor
+- Deterministic replay export/import
+- Camera zoom, pan, follow, fit, and center controls
+- Developer inspector and categorized combat log
 
 ## Hotkeys
-Arrows/WQEX drive, A/D drift, S straight, F fire, Space/Enter commit, H help, Escape close/select straight.
+Arrows/WQEX drive, A/D drift, S straight, V changes gear while eligible, F fires, Space/Enter commits, H opens help, and Escape closes help/selects straight.
 
 ## Remaining approximations
-Top-down rollover/vault animation and landing damage are practical visual approximations. Exact vehicle and wall collision procedures remain planned for v0.4.1.
-
-
-## v0.4.1 highlights
-- Deterministic seeded random generator and phase-by-phase replay snapshots
-- Replay export/import with timeline controls
-- Zoom, pan, fit-arena, center-car, and follow-camera controls
-- Fixed combat workspace with scrolling sidebar
-- Live developer vehicle-state inspector
-- Turn/phase tagged combat log with category filters
+Top-down rollover/vault animation and landing damage are practical visual approximations. Exact vehicle-to-vehicle and full wall-collision procedures remain planned.

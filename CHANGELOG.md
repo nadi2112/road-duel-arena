@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.4.3 — Driving Controls & Readability
+
+- Locked the arena viewport to a responsive 1:1 aspect ratio.
+- Removed the Resume Live button; replay automatically returns to live at the newest current-game frame.
+- Replaced the ambiguous heading/momentum compass with a labeled car-facing and travel-path display.
+- Changed accelerate, hold, and decelerate into editable pre-commit speed selections.
+- Restricted maneuver controls to scheduled movement phases and disabled them during forced crash movement.
+- Left skid mechanics unchanged for a later focused rules review.
+- Updated documentation and replay/version metadata to v0.4.3.
+
+
+## v0.4.2 — Persistent Log & Reverse Preview
+
+- Moved the combat log out of the scrolling controls sidebar into a dedicated third workspace column.
+- Made the log fill the available viewport height on wide displays.
+- Added responsive breakpoints: the log moves below the arena/control row on medium screens and all panels stack on narrow screens.
+- Corrected the dashed reverse movement preview to follow effective travel direction behind the vehicle.
+- Corrected reverse bend preview steering so it matches committed movement.
+- Updated replay metadata and visible version labels to v0.4.2.
+
 ## v0.4.1 — Replay Recovery & Inspector Polish
 
 - Fixed live controls remaining disabled after returning to the newest replay frame.
