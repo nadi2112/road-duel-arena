@@ -1,7 +1,7 @@
 Road Duel Arena
 Game Design & Technical Design Document
 Document Version: 1.3
-Game Version: v0.4.4
+Game Version: v0.4.5
 Next Milestone: skid-mechanics review
 
 1. Project Overview
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.4.4.
+The current stable baseline is v0.4.5.
 Major implemented systems include:
 Arena movement
 Basic vehicle combat
@@ -77,7 +77,7 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.4.4 milestone is complete.
+The v0.4.5 milestone is complete.
 Completed goals:
 Corrected user-facing heading and momentum values to use compass bearings.
 Allowed a speed change at the beginning of any phase until a nonzero change is committed that turn.
@@ -657,7 +657,7 @@ Action:
 Schedule a focused comparison of the implemented skid sequence against the reference crash rules before making further changes.
 
 
-## v0.4.4 — Phase Speed and Bend Controls
+## v0.4.5 — Phase Speed and Bend Controls
 Introduced:
 - Compass-bearing conversion for heading and travel displays. Simulation angles remain unchanged, while user-facing bearings use north as 0° and east as 90°.
 - Speed-change selection at the beginning of any phase, provided the vehicle has not already accelerated or decelerated during that turn.
@@ -685,4 +685,4 @@ Reason:
 This directly follows the bend difficulty ranges and gives the player the full basic bend set with a simple computer-first selector.
 
 ### Deferred Review: Skid Mechanics
-Skid, fishtail, spin, rollover, and other loss-of-control movement are intentionally unchanged in v0.4.4. A focused rules and presentation review is planned for the next development discussion.
+Skid, fishtail, spin, rollover, and other loss-of-control movement are intentionally unchanged in v0.4.5. A focused rules and presentation review is planned for the next development discussion.

@@ -138,3 +138,6 @@ main{max-width:1800px}
 .controlLabel{display:flex;flex-direction:column;gap:6px;color:#aeb8c7;font-size:12px;font-weight:700}
 .controlLabel select{width:100%}
 #speedChange:disabled,#bendAngle:disabled{opacity:.55;cursor:not-allowed}
+
+/* v0.4.5 classic-scale movement and replay polish */
+#replaySlider{width:calc(100% + 16px);margin-left:-8px;margin-right:-8px}

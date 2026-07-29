@@ -1,3 +1,14 @@
+# Changelog
+
+## v0.4.5
+- Changed tabletop scale so one inch of movement equals one full car length.
+- Reworked bends to use classic corner-to-corner placement: the inside front corner becomes the matching rear corner.
+- Limited bend geometry to the first ordinary inch; additional phase distance continues straight, and half-moves cannot bend.
+- Made repeated Left/Right Arrow presses select 15-degree bend increments through 90 degrees.
+- Removed the redundant vehicle-direction compass from the Developer Inspector.
+- Extended the replay slider to visually use its complete available range.
+- Clarified Random seed and RNG state tooltips.
+
 ## v0.4.4 — Phase Speed & Bend Controls
 
 - Corrected the inspector and compass to convert canvas headings to compass bearings (north = 0°, east = 90°).

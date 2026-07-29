@@ -1,8 +1,8 @@
-# Road Duel Arena v0.4.4
+# Road Duel Arena v0.4.5
 
 Open `index.html` directly in a modern browser.
 
-## v0.4.4 highlights
+## v0.4.5 highlights
 
 - Correct compass bearings: 0° is north and 90° is east while simulation angles remain canvas-native.
 - Acceleration and deceleration may be selected at the beginning of any phase until a nonzero change is committed that turn.

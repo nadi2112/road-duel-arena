@@ -3,7 +3,7 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
-  const SCALE = 18; // pixels per tabletop inch (visual approximation)
+  const SCALE = 36; // pixels per tabletop inch; one tabletop inch equals one car length
   const arena = {x:45,y:45,w:810,h:810};
   // Exact movement schedule from the classic Movement Chart for 0-100 mph.
   // Values are total inches moved in each of the five phases.
@@ -84,7 +84,7 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.4.4",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.4.5",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -222,16 +222,42 @@
     return true
   }
   function crash(car){scheduleCrash(car,3,"maneuver",controlRow(car.speed).m)}
+  function bendEndpoint(car,side,angle,inches){
+    // Classic bend geometry: the inside front corner before the maneuver becomes
+    // the matching rear corner after it. Because the counter is exactly 1 inch
+    // long, this consumes one ordinary inch; any remaining phase movement is
+    // then made straight along the new heading.
+    const length=36, width=20;
+    const reverse=car.direction<0;
+    const turnSign=(side==="left"?-1:1)*(reverse?-1:1);
+    const newHeading=norm(car.heading+turnSign*angle);
+    const insideY=side==="left"?-width/2:width/2;
+    const startX=reverse?-length/2:length/2;
+    const endX=reverse?length/2:-length/2;
+    const rotate=(x,y,h)=>({x:x*Math.cos(rad(h))-y*Math.sin(rad(h)),y:x*Math.sin(rad(h))+y*Math.cos(rad(h))});
+    const startCorner=rotate(startX,insideY,car.heading);
+    const endCorner=rotate(endX,insideY,newHeading);
+    let x=car.x+startCorner.x-endCorner.x;
+    let y=car.y+startCorner.y-endCorner.y;
+    const remaining=Math.max(0,inches-1);
+    const travel=norm(newHeading+(reverse?180:0));
+    x+=Math.cos(rad(travel))*remaining*SCALE;
+    y+=Math.sin(rad(travel))*remaining*SCALE;
+    return {x,y,heading:newHeading};
+  }
   function performMove(car,mv){
     const inches=moveDist(car);
     if(inches<=0)return;
     if(car.speed===0){endCrashAtHalt(car);return}
     if(crashMove(car,inches))return;
+    // A standalone half-move must be straight and cannot contain a maneuver.
+    if(inches<1 && mv?.d){mv={type:"straight",d:0,angle:0};}
+    const isBend=mv?.type==="bendL"||mv?.type==="bendR";
     let d=(mv?.d||0)+(car.direction<0&&mv?.d?1:0);
     const originalTravel=movementHeading(car);
     const bendAngle=mv?.angle||15;
-    if(mv?.type==="bendL")car.heading=norm(car.heading-(car.direction<0?-bendAngle:bendAngle));
-    if(mv?.type==="bendR")car.heading=norm(car.heading+(car.direction<0?-bendAngle:bendAngle));
+    const bendResult=isBend?bendEndpoint(car,mv.type==="bendL"?"left":"right",bendAngle,inches):null;
+    if(bendResult)car.heading=bendResult.heading;
     car.crashMomentumHeading=originalTravel;
     if(!controlCheck(car,d,"maneuver")){
       // Steering changes the body heading, while the crash skid preserves pre-bend momentum.
@@ -244,8 +270,11 @@
     if(mv?.type==="driftL")lateral=-0.25*SCALE;
     if(mv?.type==="driftR")lateral=0.25*SCALE;
     const travel=movementHeading(car),previous={x:car.x,y:car.y};
-    car.x += Math.cos(rad(travel))*inches*SCALE + Math.cos(rad(car.heading+90))*lateral;
-    car.y += Math.sin(rad(travel))*inches*SCALE + Math.sin(rad(car.heading+90))*lateral;
+    if(bendResult){car.x=bendResult.x;car.y=bendResult.y;}
+    else {
+      car.x += Math.cos(rad(travel))*inches*SCALE + Math.cos(rad(car.heading+90))*lateral;
+      car.y += Math.sin(rad(travel))*inches*SCALE + Math.sin(rad(car.heading+90))*lateral;
+    }
     resolveSolidCollisions(car,previous,false);
     if(dist(player,ai)<38 && player.alive && ai.alive){
       const rel=Math.abs(player.speed-ai.speed) || Math.max(player.speed,ai.speed);
@@ -313,7 +342,7 @@
   function importReplayFile(file){const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!Array.isArray(data.frames)||!data.frames.length)throw new Error("No replay frames");replay=data;rngSeed=data.seed||1;rngState=rngSeed;replayReadOnly=true;locked=true;restoreFrame(0,{autoResume:false});log("Imported replay loaded. Use replay controls to inspect it.","warn","movement")}catch(e){toast(`Replay import failed: ${e.message}`)}};reader.readAsText(file)}
   function stopReplay(){if(replayTimer){clearInterval(replayTimer);replayTimer=null}if($("replayPlay"))$("replayPlay").textContent="Play"}
   function toggleReplayPlay(){if(replayTimer){stopReplay();return}if(!replay.frames.length)return;if(!replayMode&&!replayReadOnly)restoreFrame(0,{autoResume:false});$("replayPlay").textContent="Pause";replayTimer=setInterval(()=>{if(replayIndex>=replay.frames.length-1){stopReplay();if(!replayReadOnly)resumeLive();return}restoreFrame(replayIndex+1)},500)}
-  function canChooseManeuver(){return moveDist(player)>0 && !player.crashState;}
+  function canChooseManeuver(){return moveDist(player)>=1 && !player.crashState;}
   function projectedSpeed(){
     if(player.changedSpeed)return player.speed;
     const limit=player.direction<0?(player.reverseTopSpeed||Math.max(5,Math.floor(player.topSpeed/5))):player.topSpeed;
@@ -386,8 +415,7 @@
       <div><b>Handling</b>${car.handling}</div><div><b>HC</b>${car.hc}</div>
       <div><b>Crash state</b><span class="statusBadge ${statusClass}">${crash}</span></div><div><b>Internal</b>${car.internal}</div>
       <div><b>Direction</b>${car.direction<0?"reverse":"forward"}</div><div><b>Replay</b>${replayMode?"REPLAY":"LIVE"} · ${frameText}</div>
-      <div><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="Internal pseudo-random generator state; useful only for exact replay debugging"><b>RNG state</b>${rngState}</div>
-      <div class="directionCompass"><b>Vehicle direction</b><span class="compassRose">N</span><span class="compassCar" style="transform:translate(-50%,-50%) rotate(${headingBearing}deg)">▲</span><i class="momentumArrow" style="transform:translate(-50%,-88%) rotate(${travelBearing}deg)"></i><div class="compassReadout"><span><strong>Car faces</strong>${headingBearing.toFixed(0)}°</span><span><strong>Travel path</strong>${travelBearing.toFixed(0)}°</span></div><span class="compassNote">Blue car = body heading · Gold arrow = actual movement</span></div>`;
+      <div title="The fixed starting value used to reproduce this game's random rolls."><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="The generator's current internal value after random rolls have been consumed."><b>RNG state</b>${rngState}</div>`;
   }
   function checkEnd(){
     if(!player.alive||!ai.alive){
@@ -500,15 +528,18 @@
   function drawPreview(){
     if(!started||!player.alive||player.crashState)return;
     const inches=moveDist(player);if(!inches)return;
-    let h=player.heading;
+    let h=player.heading,x,y;
     const previewAngle=selected.angle||15;
-    if(selected.type==="bendL")h+=player.direction<0?previewAngle:-previewAngle;
-    if(selected.type==="bendR")h+=player.direction<0?-previewAngle:previewAngle;
-    h=norm(h);
-    const travel=norm(h+(player.direction<0?180:0));
-    let x=player.x+Math.cos(rad(travel))*inches*SCALE,y=player.y+Math.sin(rad(travel))*inches*SCALE;
-    if(selected.type==="driftL"){x+=Math.cos(rad(h+90))*(-.25*SCALE);y+=Math.sin(rad(h+90))*(-.25*SCALE)}
-    if(selected.type==="driftR"){x+=Math.cos(rad(h+90))*(.25*SCALE);y+=Math.sin(rad(h+90))*(.25*SCALE)}
+    const isBend=selected.type==="bendL"||selected.type==="bendR";
+    if(isBend && inches>=1){
+      const end=bendEndpoint(player,selected.type==="bendL"?"left":"right",previewAngle,inches);
+      x=end.x;y=end.y;h=end.heading;
+    } else {
+      const travel=movementHeading(player);
+      x=player.x+Math.cos(rad(travel))*inches*SCALE;y=player.y+Math.sin(rad(travel))*inches*SCALE;
+      if(selected.type==="driftL"){x+=Math.cos(rad(h+90))*(-.25*SCALE);y+=Math.sin(rad(h+90))*(-.25*SCALE)}
+      if(selected.type==="driftR"){x+=Math.cos(rad(h+90))*(.25*SCALE);y+=Math.sin(rad(h+90))*(.25*SCALE)}
+    }
     ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle="#f2b84b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(player.x,player.y);ctx.lineTo(x,y);ctx.stroke();
     ctx.translate(x,y);ctx.rotate(rad(h));ctx.strokeRect(-18,-10,36,20);ctx.restore();
   }
@@ -516,8 +547,14 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.4",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
-  function chooseBend(side){const angle=Number($("bendAngle").value||15),d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle)}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.5",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  function chooseBend(side,step=false){
+    const sameSide=selected.type===(side==="left"?"bendL":"bendR");
+    let angle=Number($("bendAngle").value||15);
+    if(step)angle=sameSide?Math.min(90,(selected.angle||angle)+15):15;
+    $("bendAngle").value=String(angle);
+    const d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle);
+  }
   $("bendLeft").onclick=()=>chooseBend("left");
   $("bendRight").onclick=()=>chooseBend("right");
   $("bendAngle").onchange=()=>{if(selected.type==="bendL")chooseBend("left");else if(selected.type==="bendR")chooseBend("right");else draw()};
@@ -545,7 +582,7 @@
   if($("logFilter"))$("logFilter").onchange=applyLogFilter;if($("inspectCar"))$("inspectCar").onchange=updateInspector;
   if($("replayStart"))$("replayStart").onclick=()=>{stopReplay();restoreFrame(0,{autoResume:false})};if($("replayBack"))$("replayBack").onclick=()=>{stopReplay();restoreFrame(replayIndex-1,{autoResume:false})};if($("replayForward"))$("replayForward").onclick=()=>{stopReplay();restoreFrame(replayIndex+1)};if($("replayPlay"))$("replayPlay").onclick=toggleReplayPlay;if($("replaySlider"))$("replaySlider").oninput=e=>{stopReplay();restoreFrame(Number(e.target.value))};if($("exportReplay"))$("exportReplay").onclick=exportReplay;if($("importReplay"))$("importReplay").onchange=e=>{if(e.target.files[0])importReplayFile(e.target.files[0])};
   function toggleHotkeys(show){const o=$("hotkeyOverlay");if(!o)return;o.style.display=(show===undefined?(o.style.display==="none"?"flex":"none"):(show?"flex":"none"))}
-  document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w"){const o=speedChangeOptions(),i=o.indexOf(pendingSpeedDelta);setSpeedDelta(o[Math.min(o.length-1,Math.max(0,i)+1)])}else if(k==="arrowdown"||k==="x"){const o=speedChangeOptions(),i=o.indexOf(pendingSpeedDelta);setSpeedDelta(o[Math.max(0,i<0?0:i-1)])}else if(k==="c")setSpeedDelta(0);else if(k==="arrowleft"||k==="q")$("bendLeft").click();else if(k==="arrowright"||k==="e")$("bendRight").click();else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="v"&&$("reverse"))$("reverse").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
+  document.addEventListener("keydown",e=>{if(!started||locked)return;const tag=(e.target.tagName||"").toLowerCase();if(["input","select","textarea"].includes(tag))return;const k=e.key.toLowerCase();if(["arrowup","arrowdown","arrowleft","arrowright"," ","enter"].includes(k))e.preventDefault();if(k==="h"||k==="?"){toggleHotkeys();return}if(k==="escape"){toggleHotkeys(false);setSelected("straight",0,"go straight");return}if($("hotkeyOverlay")&&$("hotkeyOverlay").style.display!=="none")return;if(k==="arrowup"||k==="w"){const o=speedChangeOptions(),i=o.indexOf(pendingSpeedDelta);setSpeedDelta(o[Math.min(o.length-1,Math.max(0,i)+1)])}else if(k==="arrowdown"||k==="x"){const o=speedChangeOptions(),i=o.indexOf(pendingSpeedDelta);setSpeedDelta(o[Math.max(0,i<0?0:i-1)])}else if(k==="c")setSpeedDelta(0);else if(k==="arrowleft"||k==="q")chooseBend("left",true);else if(k==="arrowright"||k==="e")chooseBend("right",true);else if(k==="a")$("driftL").click();else if(k==="d")$("driftR").click();else if(k==="s")$("straight").click();else if(k==="v"&&$("reverse"))$("reverse").click();else if(k==="f")$("fire").click();else if(k===" "||k==="enter")$("commit").click()});
   if($("closeHotkeys"))$("closeHotkeys").onclick=()=>toggleHotkeys(false);
   updateUI();fitArena();draw();
 })();
