@@ -1,8 +1,8 @@
 Road Duel Arena
 Game Design & Technical Design Document
-Document Version: 1.3
-Game Version: v0.4.5
-Next Milestone: skid-mechanics review
+Document Version: 1.4
+Game Version: v0.4.6
+Next Milestone: skid playtesting and refinement
 
 1. Project Overview
 Project Goals
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.4.5.
+The current stable baseline is v0.4.6.
 Major implemented systems include:
 Arena movement
 Basic vehicle combat
@@ -77,15 +77,14 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.4.5 milestone is complete.
+The v0.4.6 milestone is complete.
 Completed goals:
-Corrected user-facing heading and momentum values to use compass bearings.
-Allowed a speed change at the beginning of any phase until a nonzero change is committed that turn.
-Added acceleration and normal deceleration choices in 5 mph increments.
-Limited acceleration choices by each vehicle's configured maximum acceleration.
-Added bends from 15° through 90° in 15° increments with D1 through D6 difficulty.
-Updated bend previews, replay metadata, release documentation, and the maintained TDD filename.
-Deferred skid-mechanics changes for a focused review after this release.
+Reworked failed bends so the normal corner-aligned bend is completed before skid movement.
+Made skid distance consume movement remaining after the maneuver and continue across later phases when necessary.
+Resumed straight movement along the body heading after the skid distance is fully consumed.
+Added an on-map pending-speed projection.
+Made Left and Right Arrow traverse a signed bend-angle sequence through Straight.
+Updated replay metadata and release documentation.
 
 2. Design Philosophy
 Computer-First Design
@@ -686,3 +685,22 @@ This directly follows the bend difficulty ranges and gives the player the full b
 
 ### Deferred Review: Skid Mechanics
 Skid, fishtail, spin, rollover, and other loss-of-control movement are intentionally unchanged in v0.4.5. A focused rules and presentation review is planned for the next development discussion.
+
+
+## v0.4.6 — Skid Mechanics & Control Polish
+
+### Failed bend and skid order
+A failed bend still completes the same one-inch corner-aligned bend used by a successful maneuver. The vehicle then skids from that completed bend position along the travel heading recorded immediately before the maneuver.
+
+The phase movement budget is consumed in this order:
+1. One inch for the normal bend.
+2. As much pending skid distance as the remaining phase movement permits.
+3. Any distance still unused after the skid is complete moves straight along the vehicle's current body heading.
+
+If the phase contains only one inch, the bend consumes the entire phase and the skid begins on the vehicle's next scheduled movement. If the phase contains two or more inches, some or all of the skid may occur immediately after the bend. Unfinished skid distance remains in crash state and continues on later scheduled movements.
+
+### Projected speed label
+While a legal acceleration or deceleration is selected but not committed, the map label above the player vehicle displays the current and projected speeds in red using `current → projected mph`. The normal label returns after commitment or cancellation.
+
+### Signed bend keyboard sequence
+Left and Right Arrow operate on a signed angle from -90° through 0° to +90°. The sequence includes Straight, so reversing direction requires stepping back through smaller bends instead of jumping immediately to the opposite side.

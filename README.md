@@ -1,16 +1,15 @@
-# Road Duel Arena v0.4.5
+# Road Duel Arena v0.4.6
 
 Open `index.html` directly in a modern browser.
 
-## v0.4.5 highlights
+## v0.4.6 highlights
 
-- Correct compass bearings: 0° is north and 90° is east while simulation angles remain canvas-native.
-- Acceleration and deceleration may be selected at the beginning of any phase until a nonzero change is committed that turn.
-- Speed choices use 5 mph increments; acceleration is capped by the vehicle design and normal braking is offered through 10 mph.
-- Bend choices now include 15°, 30°, 45°, 60°, 75°, and 90°, with D1 through D6 handling difficulty.
-- The movement preview reflects the selected bend angle before commitment.
-- Skid mechanics remain unchanged pending a dedicated rules review.
-- Replay exports identify themselves as version `0.4.4`.
+- A loss-of-control bend now completes the normal corner-aligned one-inch bend before the skid begins.
+- Skid distance follows the vehicle's original direction of travel and consumes only the movement remaining after the maneuver.
+- Skids can continue across later scheduled movements; after the skid is complete, unused movement continues in the direction the car is facing.
+- A pending acceleration or deceleration is shown over the player car as `current → projected mph` in red until committed.
+- Left and Right Arrow now move through the complete signed bend sequence: 90° left through Straight to 90° right.
+- Replay exports identify themselves as version `0.4.6`.
 
 ## Existing major systems
 - Garage and saved vehicle designs

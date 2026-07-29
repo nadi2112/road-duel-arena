@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.6 — Skid Mechanics & Control Polish
+
+- Changed failed bends to complete the normal one-inch, corner-aligned bend before skid movement begins.
+- Made skid movement follow the pre-maneuver travel heading and consume only the phase movement remaining after the bend.
+- Preserved unfinished skid distance across later scheduled movements; unused distance after completion continues along the vehicle's body heading.
+- Added a red `current → projected mph` map label while acceleration or deceleration is pending.
+- Changed Left/Right Arrow bend selection to increment and decrement through left bends, Straight, and right bends without jumping sides.
+- Updated replay metadata, page branding, README, and TDD for v0.4.6.
+
 ## v0.4.5
 - Changed tabletop scale so one inch of movement equals one full car length.
 - Reworked bends to use classic corner-to-corner placement: the inside front corner becomes the matching rear corner.

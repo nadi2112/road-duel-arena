@@ -139,5 +139,5 @@ main{max-width:1800px}
 .controlLabel select{width:100%}
 #speedChange:disabled,#bendAngle:disabled{opacity:.55;cursor:not-allowed}
 
-/* v0.4.5 classic-scale movement and replay polish */
+/* v0.4.6 skid mechanics and control polish */
 #replaySlider{width:calc(100% + 16px);margin-left:-8px;margin-right:-8px}
