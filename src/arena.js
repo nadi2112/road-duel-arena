@@ -84,7 +84,7 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.4.6",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.4.7",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -288,7 +288,19 @@
     if(mv?.type==="driftL")lateral=-0.25*SCALE;
     if(mv?.type==="driftR")lateral=0.25*SCALE;
     const travel=movementHeading(car),previous={x:car.x,y:car.y};
-    if(isBend){const bendResult=bendEndpoint(car,mv.type==="bendL"?"left":"right",bendAngle,inches);car.x=bendResult.x;car.y=bendResult.y;}
+    if(isBend){
+      // bendUnit was calculated from the original pre-maneuver heading. Reuse it
+      // rather than recalculating after car.heading has already been rotated.
+      // Recalculation here used to rotate the endpoint translation a second time,
+      // causing the committed car to miss the correctly drawn preview outline.
+      car.x=bendUnit.x;car.y=bendUnit.y;
+      const remaining=Math.max(0,inches-1);
+      if(remaining>0){
+        const postBendTravel=movementHeading(car);
+        car.x+=Math.cos(rad(postBendTravel))*remaining*SCALE;
+        car.y+=Math.sin(rad(postBendTravel))*remaining*SCALE;
+      }
+    }
     else {
       car.x += Math.cos(rad(travel))*inches*SCALE + Math.cos(rad(car.heading+90))*lateral;
       car.y += Math.sin(rad(travel))*inches*SCALE + Math.sin(rad(car.heading+90))*lateral;
@@ -546,7 +558,9 @@
     if(performance.now()<car.crashBannerUntil){ctx.fillStyle="#ff4d5f";ctx.font="bold 16px sans-serif";ctx.fillText("LOSS OF CONTROL",car.x,car.y-38)}
   }
   function drawPreview(){
-    if(!started||!player.alive||player.crashState)return;
+    // A replay shows resolved historical positions, not a pending live command.
+    // Hiding the preview prevents a stale selection from suggesting a future move.
+    if(replayMode||!started||!player.alive||player.crashState)return;
     const inches=moveDist(player);if(!inches)return;
     let h=player.heading,x,y;
     const previewAngle=selected.angle||15;
@@ -567,7 +581,7 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.6",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.7",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
   function chooseBend(side){
     const angle=Number($("bendAngle").value||15);
     const d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle);

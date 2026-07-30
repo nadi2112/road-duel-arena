@@ -1,7 +1,7 @@
 Road Duel Arena
 Game Design & Technical Design Document
 Document Version: 1.4
-Game Version: v0.4.6
+Game Version: v0.4.7
 Next Milestone: skid playtesting and refinement
 
 1. Project Overview
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.4.6.
+The current stable baseline is v0.4.7.
 Major implemented systems include:
 Arena movement
 Basic vehicle combat
@@ -77,7 +77,7 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.4.6 milestone is complete.
+The v0.4.7 milestone is complete.
 Completed goals:
 Reworked failed bends so the normal corner-aligned bend is completed before skid movement.
 Made skid distance consume movement remaining after the maneuver and continue across later phases when necessary.
@@ -704,3 +704,10 @@ While a legal acceleration or deceleration is selected but not committed, the ma
 
 ### Signed bend keyboard sequence
 Left and Right Arrow operate on a signed angle from -90° through 0° to +90°. The sequence includes Straight, so reversing direction requires stepping back through smaller bends instead of jumping immediately to the opposite side.
+
+
+## v0.4.7 — Bend Geometry Replay Fix
+
+- The one-inch bend endpoint is calculated once from the vehicle's pre-maneuver heading and reused for both successful and loss-of-control movement paths.
+- Any movement beyond the first inch proceeds straight along the post-bend heading.
+- Maneuver previews are suppressed whenever replay mode is active.

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.7 — Bend Geometry Replay Fix
+
+- Fixed committed bends using an endpoint that was accidentally recalculated from the already-rotated heading.
+- Successful and failed bends now reuse the same precomputed, corner-aligned one-inch bend endpoint.
+- Movement beyond the first bend inch continues straight along the new vehicle heading.
+- Hidden the yellow maneuver preview while viewing replay frames.
+- Updated replay metadata and page branding to v0.4.7.
+
 ## v0.4.6 — Skid Mechanics & Control Polish
 
 - Changed failed bends to complete the normal one-inch, corner-aligned bend before skid movement begins.
