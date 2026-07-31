@@ -141,3 +141,10 @@ main{max-width:1800px}
 
 /* v0.4.6 skid mechanics and control polish */
 #replaySlider{width:calc(100% + 16px);margin-left:-8px;margin-right:-8px}
+
+/* v0.4.8 visible targeting math */
+.shotInspector{grid-column:1/-1!important;display:grid!important;grid-template-columns:1fr auto;gap:5px 10px!important;border:1px solid #46505e;background:#0f141a!important}
+.shotInspector>b{grid-column:1/-1;color:#ffd276;font-size:13px!important;margin-bottom:3px}
+.shotInspector span{background:transparent!important;padding:0!important;color:#c7ced8}.shotInspector span small{display:block;color:#7f8a99;font-size:9px}
+.shotInspector strong{background:transparent!important;padding:0!important;text-align:right;color:#e8edf4}.shotInspector .modPositive{color:#8be0ad}.shotInspector .modNegative{color:#ff9ca5}
+.shotInspector em{grid-column:1/-1;color:#8e99aa;font-size:9px;line-height:1.4;margin-top:4px}

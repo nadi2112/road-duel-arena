@@ -1,3 +1,11 @@
+# v0.4.8
+- Added a live **Current Machine-Gun Shot** breakdown to the Developer Inspector.
+- Combat log shots now print base to-hit, every applied modifier, total modifier, and final roll needed.
+- Fixed Combat-only log filtering by assigning combat events an explicit category instead of relying on message inference.
+- Corrected prototype range modifiers to classic point-blank / 4-inch-band rules.
+- Expanded target-speed modifiers and added the stationary-firer bonus used by the current prototype.
+- Clearly labels classic targeting modifiers that are not implemented yet.
+
 # Changelog
 
 ## v0.4.7 — Bend Geometry Replay Fix

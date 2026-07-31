@@ -84,7 +84,7 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.4.7",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.4.8",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -314,21 +314,54 @@
       player.speed=Math.max(0,player.speed-10);ai.speed=Math.max(0,ai.speed-10);
     }
   }
+  function rangeModifier(range){
+    // Classic rules: point blank is less than 1 inch; long range is -1
+    // for every full 4 inches. Distances from 1.00 through 3.99 have no modifier.
+    if(range<1)return 4;
+    return -Math.floor(range/4);
+  }
+  function targetSpeedModifier(speed){
+    // The current arena uses the target-speed portion of the classic movement
+    // modifiers. The full relative-arc movement table is a later combat milestone.
+    if(speed===0)return 1;
+    if(speed>=80)return -6;
+    if(speed>=70)return -5;
+    if(speed>=60)return -4;
+    if(speed>=50)return -3;
+    if(speed>=40)return -2;
+    if(speed>=30)return -1;
+    return 0;
+  }
+  function shotCalculation(shooter,target){
+    const range=dist(shooter,target)/SCALE;
+    const modifiers=[
+      {name:"Range",value:rangeModifier(range),detail:`${range.toFixed(2)} in`},
+      {name:"Target movement",value:targetSpeedModifier(target.speed),detail:`${target.speed} mph`},
+      {name:"Firer stationary",value:shooter.speed===0?1:0,detail:shooter.speed===0?"yes":"no"},
+      {name:"Maneuver this phase",value:-(shooter.maneuverD||0),detail:`D${shooter.maneuverD||0}`},
+      {name:"Crash / skid penalty",value:-(shooter.firePenalty||0),detail:shooter.firePenalty?`-${shooter.firePenalty}`:"none"}
+    ];
+    const total=modifiers.reduce((sum,m)=>sum+m.value,0);
+    const base=7; // Front machine gun in the current prototype.
+    return {base,range,modifiers,total,targetNum:base-total};
+  }
+  function modifierText(value){return value>0?`+${value}`:`${value}`}
   function fire(shooter,target){
     if(!shooter.alive||shooter.ammo<=0||shooter.firedThisPhase||shooter.weaponDP<=0)return false;
-    if(!inArc(shooter,target)){log(`${shooter.name}: target outside front firing arc.`,"bad");return false}
-    const range=dist(shooter,target)/SCALE;
-    const rangeMod=range<=4?1:range<=12?0:range<=20?-1:-3;
-    const moveMod=target.speed>=50?-2:target.speed>=20?-1:0;
-    const maneuverMod=-(shooter.maneuverD||0);if(shooter.firePenalty>=99){log(`${shooter.name}: aimed fire prohibited after loss of control.`,"bad");return false}const crashMod=-(shooter.firePenalty||0);
-    const targetNum=Math.max(3,7-rangeMod-moveMod-maneuverMod-crashMod);
+    if(!inArc(shooter,target)){log(`${shooter.name}: target outside front firing arc.`,"bad","combat");return false}
+    if(shooter.firePenalty>=99){log(`${shooter.name}: aimed fire prohibited after loss of control.`,"bad","combat");return false}
+    const shot=shotCalculation(shooter,target);
     const r=roll(2); shooter.ammo--; shooter.firedThisPhase=true;
-    log(`${shooter.name} fires: roll ${r}, needs ${targetNum}+ (range ${range.toFixed(1)}").`,r>=targetNum?"good":"bad");
-    if(r>=targetNum){
+    const breakdown=shot.modifiers.filter(m=>m.value!==0).map(m=>`${m.name} ${modifierText(m.value)}`).join(", ")||"no modifiers";
+    log(`${shooter.name} fires Machine Gun: roll ${r}, needs ${shot.targetNum}+ [base ${shot.base}; ${breakdown}; total ${modifierText(shot.total)}].`,r>=shot.targetNum?"good":"bad","combat");
+    if(r===2||r<shot.targetNum){
+      log(`${shooter.name} misses ${target.name}.`,"bad","combat");
+    } else {
       const dmg=roll(1); const side=sideHit(target,shooter);
-      log(`Hit! ${dmg} damage to ${target.name}'s ${side}.`,"good"); damage(target,dmg,side,"Machine gun");
+      log(`Hit! ${dmg} damage to ${target.name}'s ${side}.`,"good","damage"); damage(target,dmg,side,"Machine gun");
       controlCheck(target,dmg>=10?3:dmg>=6?2:1,"hazard");
     }
+    updateInspector();
     return true;
   }
   function aiChoice(){
@@ -445,7 +478,8 @@
       <div><b>Handling</b>${car.handling}</div><div><b>HC</b>${car.hc}</div>
       <div><b>Crash state</b><span class="statusBadge ${statusClass}">${crash}</span></div><div><b>Internal</b>${car.internal}</div>
       <div><b>Direction</b>${car.direction<0?"reverse":"forward"}</div><div><b>Replay</b>${replayMode?"REPLAY":"LIVE"} · ${frameText}</div>
-      <div title="The fixed starting value used to reproduce this game's random rolls."><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="The generator's current internal value after random rolls have been consumed."><b>RNG state</b>${rngState}</div>`;
+      <div title="The fixed starting value used to reproduce this game's random rolls."><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="The generator's current internal value after random rolls have been consumed."><b>RNG state</b>${rngState}</div>
+      ${(()=>{const target=car===player?ai:player,shot=shotCalculation(car,target);return `<div class="shotInspector"><b>Current Machine-Gun Shot</b><span>Base to-hit</span><strong>${shot.base}+</strong>${shot.modifiers.map(m=>`<span>${m.name}<small>${m.detail}</small></span><strong class="${m.value>0?'modPositive':m.value<0?'modNegative':''}">${modifierText(m.value)}</strong>`).join('')}<span>Total modifier</span><strong>${modifierText(shot.total)}</strong><span>Final roll needed</span><strong>${shot.targetNum}+</strong><em>Preview only. Full relative-arc movement modifiers, computers, skill, visibility, specific targets, and sustained fire are not implemented yet.</em></div>`})()}`;
   }
   function checkEnd(){
     if(!player.alive||!ai.alive){
