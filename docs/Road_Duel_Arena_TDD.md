@@ -1,8 +1,8 @@
 Road Duel Arena
 Game Design & Technical Design Document
-Document Version: 1.4
-Game Version: v0.4.7
-Next Milestone: skid playtesting and refinement
+Document Version: 1.5
+Game Version: v0.4.8
+Next Milestone: combat targeting and fire mechanics refinement
 
 1. Project Overview
 Project Goals
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.4.7.
+The current stable baseline is v0.4.8.
 Major implemented systems include:
 Arena movement
 Basic vehicle combat
@@ -77,14 +77,14 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.4.7 milestone is complete.
+The v0.4.8 milestone is complete.
 Completed goals:
-Reworked failed bends so the normal corner-aligned bend is completed before skid movement.
-Made skid distance consume movement remaining after the maneuver and continue across later phases when necessary.
-Resumed straight movement along the body heading after the skid distance is fully consumed.
-Added an on-map pending-speed projection.
-Made Left and Right Arrow traverse a signed bend-angle sequence through Straight.
-Updated replay metadata and release documentation.
+Added a live machine-gun targeting breakdown to the Developer Inspector.
+Made every currently applied to-hit modifier visible, including the total modifier and final roll required.
+Expanded combat-log shot messages to include the targeting calculation.
+Fixed the Combat-only log filter by assigning combat events explicit categories.
+Corrected point-blank and long-range modifier bands.
+Updated replay metadata, page branding, README, changelog, and technical documentation to v0.4.8.
 
 2. Design Philosophy
 Computer-First Design
@@ -705,6 +705,15 @@ While a legal acceleration or deceleration is selected but not committed, the ma
 ### Signed bend keyboard sequence
 Left and Right Arrow operate on a signed angle from -90° through 0° to +90°. The sequence includes Straight, so reversing direction requires stepping back through smaller bends instead of jumping immediately to the opposite side.
 
+
+## v0.4.8 — Combat Targeting Visibility
+
+- Added a live machine-gun shot calculation to the Developer Inspector.
+- Displayed base to-hit, applied modifiers, total modifier, and final required roll.
+- Added detailed targeting calculations to combat-log firing messages.
+- Fixed Combat-only filtering by explicitly categorizing combat events.
+- Corrected point-blank and four-inch-band range modifiers.
+- Updated replay metadata and all current-version branding and documentation.
 
 ## v0.4.7 — Bend Geometry Replay Fix
 

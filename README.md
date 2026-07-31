@@ -1,19 +1,16 @@
-# Road Duel Arena v0.4.7
+# Road Duel Arena v0.4.8
 
 Open `index.html` directly in a modern browser.
 
-## v0.4.7 highlights
+## v0.4.8 highlights
 
-- Fixed bend placement so the committed car uses the same correctly aligned endpoint as the preview.
-- Hidden the yellow maneuver preview whenever replay mode is active.
-- Retains the v0.4.6 skid, projected-speed, and signed-angle controls described below.
-
-- A loss-of-control bend now completes the normal corner-aligned one-inch bend before the skid begins.
-- Skid distance follows the vehicle's original direction of travel and consumes only the movement remaining after the maneuver.
-- Skids can continue across later scheduled movements; after the skid is complete, unused movement continues in the direction the car is facing.
-- A pending acceleration or deceleration is shown over the player car as `current → projected mph` in red until committed.
-- Left and Right Arrow now move through the complete signed bend sequence: 90° left through Straight to 90° right.
-- Replay exports identify themselves as version `0.4.7`.
+- Added a live **Current Machine-Gun Shot** breakdown to the Developer Inspector.
+- Shows the base to-hit, range, target movement, stationary-firer, maneuver, and crash/skid modifiers, plus the total modifier and final roll required.
+- Combat log shots now include the complete targeting calculation.
+- Fixed the **Combat only** log filter by explicitly categorizing firing and hit/miss events as combat.
+- Corrected range modifiers to use point blank below 1 inch and -1 for each full 4-inch range band.
+- Replay exports identify themselves as version `0.4.8`.
+- Advanced classic modifiers that are not yet implemented are clearly identified in the inspector.
 
 ## Existing major systems
 - Garage and saved vehicle designs
