@@ -1,18 +1,16 @@
-# Road Duel Arena v0.4.10
+# Road Duel Arena v0.5.0
 
 Open `index.html` directly in a modern browser.
 
-## v0.4.10 highlights
+## v0.5.0 highlights
 
-- Corrects the front machine gun to fire no more than once during each five-phase turn.
-
-- Added a live **Current Machine-Gun Shot** breakdown to the Developer Inspector.
-- Shows the base to-hit, range, target movement, stationary-firer, maneuver, and crash/skid modifiers, plus the total modifier and final roll required.
-- Combat log shots now include the complete targeting calculation.
-- Fixed the **Combat only** log filter by explicitly categorizing firing and hit/miss events as combat.
-- Corrected range modifiers to use point blank below 1 inch and -1 for each full 4-inch range band.
-- Replay exports identify themselves as version `0.4.10`.
-- Advanced classic modifiers that are not yet implemented are clearly identified in the inspector.
+- New layered SVG vehicle renderer in the Garage.
+- Nine body silhouettes change live with the selected body type.
+- Mounted weapons are drawn at their selected front, rear, left, right, top, or underbody positions.
+- Dynamic paint color and gloss, metallic, or matte finishes.
+- Visual tire, armor, pickup-bed, van, wagon, and camper treatments.
+- Three-quarter and top-view presentation modes with animated installation feedback.
+- Visual configuration is saved with each vehicle design.
 
 ## Existing major systems
 - Garage and saved vehicle designs

@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.5.0 — Visual Garage
+
+- Added a live SVG build bay to the Garage.
+- Added unique silhouettes for all nine current body types.
+- Added dynamic paint colors and gloss, metallic, and matte finishes.
+- Added visible weapon models positioned by mount location.
+- Added visual tire classes and armor plating levels.
+- Added three-quarter and top-view controls.
+- Added install animations and workshop presentation effects.
+- Saved designs now preserve paint and finish selections.
+- Updated page branding, replay metadata, documentation, and cache-busting URLs to v0.5.0.
+
+
 ## v0.4.10
 
 - Fixed browser-cache issue that could leave the older once-per-phase firing code active after upgrading.
