@@ -1,4 +1,12 @@
-# v0.4.9 — Once-Per-Turn Weapon Fire
+# Changelog
+
+## v0.4.10
+
+- Fixed browser-cache issue that could leave the older once-per-phase firing code active after upgrading.
+- Changed the authoritative fire-rate state to `lastFiredTurn`, preventing the same weapon from firing more than once in a five-phase turn.
+- Added version query strings to JavaScript assets so each release loads the matching code.
+
+# v0.4.10 — Once-Per-Turn Weapon Fire
 
 - Corrected machine-gun rate of fire from once per phase to once per turn.
 - Tracks firing availability on each vehicle for the entire five-phase turn.
