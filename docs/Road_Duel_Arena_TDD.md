@@ -1,7 +1,7 @@
 Road Duel Arena
 Game Design & Technical Design Document
 Document Version: 1.5
-Game Version: v0.4.8
+Game Version: v0.4.9
 Next Milestone: combat targeting and fire mechanics refinement
 
 1. Project Overview
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.4.8.
+The current stable baseline is v0.4.9.
 Major implemented systems include:
 Arena movement
 Basic vehicle combat
@@ -77,14 +77,16 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.4.8 milestone is complete.
+The v0.4.9 milestone is complete.
 Completed goals:
+Corrected weapon rate of fire so the machine gun may fire once during the full five-phase turn, rather than once per phase.
+Reset weapon firing availability only when the next turn begins.
 Added a live machine-gun targeting breakdown to the Developer Inspector.
 Made every currently applied to-hit modifier visible, including the total modifier and final roll required.
 Expanded combat-log shot messages to include the targeting calculation.
 Fixed the Combat-only log filter by assigning combat events explicit categories.
 Corrected point-blank and long-range modifier bands.
-Updated replay metadata, page branding, README, changelog, and technical documentation to v0.4.8.
+Updated replay metadata, page branding, README, changelog, and technical documentation to v0.4.9.
 
 2. Design Philosophy
 Computer-First Design

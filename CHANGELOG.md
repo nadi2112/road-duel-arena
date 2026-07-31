@@ -1,3 +1,10 @@
+# v0.4.9 — Once-Per-Turn Weapon Fire
+
+- Corrected machine-gun rate of fire from once per phase to once per turn.
+- Tracks firing availability on each vehicle for the entire five-phase turn.
+- A weapon becomes available again only when the next turn begins.
+- Updated the Fire button state, replay metadata, page branding, README, rule coverage, and technical documentation.
+
 # v0.4.8
 - Added a live **Current Machine-Gun Shot** breakdown to the Developer Inspector.
 - Combat log shots now print base to-hit, every applied modifier, total modifier, and final roll needed.

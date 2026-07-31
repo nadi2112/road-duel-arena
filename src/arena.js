@@ -60,7 +60,7 @@
     name,x,y,heading,color,isAI,speed:20,hc:2,handling:2,accel:5,topSpeed:90,
     armor:{front:20,right:15,left:15,back:15,top:5,under:5},
     ammo:20, weaponDP:3, alive:true, maneuver:null, maneuverD:0, changedSpeed:false,
-    firedThisPhase:false, internal:10, pendingCrash:null, crashState:null, firePenalty:0, burning:false,
+    firedThisTurn:false, internal:10, pendingCrash:null, crashState:null, firePenalty:0, burning:false,
     tireDP:{fl:9,fr:9,rl:9,rr:9}, direction:1, stoppedTurns:0, crashTrail:[], crashBannerUntil:0, crashMomentumHeading:null
   });
   let player = makeCar("Blue Comet",110,H/2,0,"#4da3ff");
@@ -84,7 +84,7 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.4.8",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.4.9",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -347,11 +347,11 @@
   }
   function modifierText(value){return value>0?`+${value}`:`${value}`}
   function fire(shooter,target){
-    if(!shooter.alive||shooter.ammo<=0||shooter.firedThisPhase||shooter.weaponDP<=0)return false;
+    if(!shooter.alive||shooter.ammo<=0||shooter.firedThisTurn||shooter.weaponDP<=0)return false;
     if(!inArc(shooter,target)){log(`${shooter.name}: target outside front firing arc.`,"bad","combat");return false}
     if(shooter.firePenalty>=99){log(`${shooter.name}: aimed fire prohibited after loss of control.`,"bad","combat");return false}
     const shot=shotCalculation(shooter,target);
-    const r=roll(2); shooter.ammo--; shooter.firedThisPhase=true;
+    const r=roll(2); shooter.ammo--; shooter.firedThisTurn=true;
     const breakdown=shot.modifiers.filter(m=>m.value!==0).map(m=>`${m.name} ${modifierText(m.value)}`).join(", ")||"no modifiers";
     log(`${shooter.name} fires Machine Gun: roll ${r}, needs ${shot.targetNum}+ [base ${shot.base}; ${breakdown}; total ${modifierText(shot.total)}].`,r>=shot.targetNum?"good":"bad","combat");
     if(r===2||r<shot.targetNum){
@@ -453,7 +453,7 @@
     populateSpeedChoices();
     if($("speedChange"))$("speedChange").disabled=speedLocked;
     if($("reverse")){$("reverse").disabled=controlsLocked||player.speed!==0||player.stoppedTurns<1;$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
-    $("fire").disabled=controlsLocked||player.firedThisPhase||player.ammo<=0;
+    $("fire").disabled=controlsLocked||player.firedThisTurn||player.ammo<=0;
     const maneuverLocked=controlsLocked||!canChooseManeuver();
     ["bendLeft","bendRight","bendAngle","driftL","driftR","straight"].forEach(id=>{if($(id))$(id).disabled=maneuverLocked});
     $("commit").disabled=controlsLocked;
@@ -511,9 +511,9 @@
         c.firePenalty=0;
       });
       turn++;phase=1;player.changedSpeed=ai.changedSpeed=false;pendingSpeedDelta=0;
+      player.firedThisTurn=ai.firedThisTurn=false;
       log(`— Turn ${turn} begins. Handling recovered. —`,"warn");
     } else phase++;
-    player.firedThisPhase=ai.firedThisPhase=false;
     selected={type:"straight",d:0,angle:0,label:"Go straight"};
     $("previewText").textContent="Choose a maneuver and speed change, then commit.";
     snapshot("Movement resolved");updateUI();draw();checkEnd();
@@ -615,7 +615,7 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.8",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.9",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
   function chooseBend(side){
     const angle=Number($("bendAngle").value||15);
     const d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle);

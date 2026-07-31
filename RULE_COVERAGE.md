@@ -18,3 +18,5 @@ Planned: exact vehicle and wall collisions, detailed tire/wheel integration, com
 - Rollovers begin with a 90-degree T-stop.
 - The vehicle continues rolling along its original travel vector.
 - Rollover faces are visually and mechanically tracked as right side, roof, left side, and underside.
+
+- Machine-gun rate of fire: each vehicle weapon may fire once per turn, with availability reset at the start of the next turn.

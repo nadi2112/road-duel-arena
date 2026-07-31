@@ -1,15 +1,17 @@
-# Road Duel Arena v0.4.8
+# Road Duel Arena v0.4.9
 
 Open `index.html` directly in a modern browser.
 
-## v0.4.8 highlights
+## v0.4.9 highlights
+
+- Corrects the front machine gun to fire no more than once during each five-phase turn.
 
 - Added a live **Current Machine-Gun Shot** breakdown to the Developer Inspector.
 - Shows the base to-hit, range, target movement, stationary-firer, maneuver, and crash/skid modifiers, plus the total modifier and final roll required.
 - Combat log shots now include the complete targeting calculation.
 - Fixed the **Combat only** log filter by explicitly categorizing firing and hit/miss events as combat.
 - Corrected range modifiers to use point blank below 1 inch and -1 for each full 4-inch range band.
-- Replay exports identify themselves as version `0.4.8`.
+- Replay exports identify themselves as version `0.4.9`.
 - Advanced classic modifiers that are not yet implemented are clearly identified in the inspector.
 
 ## Existing major systems
