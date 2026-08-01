@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.1 — Directional Garage
+
+- Moved the smaller live vehicle preview above the sticky Design Summary.
+- Removed the three-quarter view and circular turntable in favor of one clear top-down inspection view.
+- Fixed front and rear tire graphics so each axle reflects its own selected tire type.
+- Replaced the summed armor outline with independent front, back, left, right, top, and underbody treatments.
+- Added six always-visible numeric armor point readouts around the vehicle.
+- Rebalanced pickup geometry with a much larger bed and shorter hood.
+- Added axle labels, armor-type coloring, bay rails, a restrained scan effect, and improved vehicle surface details.
+
 ## v0.5.0 — Visual Garage
 
 - Added a live SVG build bay to the Garage.

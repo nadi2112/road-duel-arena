@@ -1,5 +1,5 @@
 window.RDA_GARAGE=(()=>{
-const D=RDA_DATA,$=id=>document.getElementById(id);let rows=[{weapon:"mg",mount:"front"}],currentId=null,currentView="threeQuarter";
+const D=RDA_DATA,$=id=>document.getElementById(id);let rows=[{weapon:"mg",mount:"front"}],currentId=null;
 const options=m=>Object.entries(m).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join("");
 const money=n=>"$"+Math.round(n).toLocaleString();
 function init(){
@@ -11,7 +11,6 @@ $("frontTires").innerHTML=options(D.tires);$("frontTires").value="puncture";
 $("rearTires").innerHTML=options(D.tires);$("rearTires").value="puncture";
 $("armorType").innerHTML=options(D.armorTypes);
 document.querySelectorAll("#garage input,#garage select").forEach(e=>e.addEventListener("input",calculate));
-document.querySelectorAll(".viewBtn").forEach(b=>b.onclick=()=>{currentView=b.dataset.view;document.querySelectorAll(".viewBtn").forEach(x=>x.classList.toggle("selected",x===b));calculate()});
 $("addWeapon").onclick=()=>{rows.push({weapon:"mg",mount:"front"});renderWeapons();calculate()};
 $("saveVehicle").onclick=save;$("newVehicle").onclick=newVehicle;renderWeapons();calculate();refreshSaved();}
 function renderWeapons(){
@@ -28,7 +27,7 @@ function bodyGeometry(key){
   subcompact:{x:128,y:91,w:250,h:122,cabinX:191,cabinW:115,nose:28,roof:58}, compact:{x:110,y:82,w:290,h:140,cabinX:180,cabinW:145,nose:34,roof:65},
   midsize:{x:92,y:77,w:326,h:148,cabinX:171,cabinW:166,nose:38,roof:68}, sedan:{x:78,y:74,w:350,h:152,cabinX:167,cabinW:178,nose:43,roof:70},
   luxury:{x:58,y:72,w:390,h:156,cabinX:166,cabinW:195,nose:52,roof:72}, wagon:{x:67,y:70,w:380,h:160,cabinX:145,cabinW:245,nose:44,roof:76},
-  pickup:{x:68,y:76,w:380,h:150,cabinX:145,cabinW:130,nose:46,roof:68,pickup:true}, camper:{x:64,y:55,w:390,h:180,cabinX:127,cabinW:270,nose:45,roof:100,camper:true},
+  pickup:{x:68,y:76,w:380,h:150,cabinX:258,cabinW:116,nose:38,roof:68,pickup:true}, camper:{x:64,y:55,w:390,h:180,cabinX:127,cabinW:270,nose:45,roof:100,camper:true},
   van:{x:72,y:56,w:374,h:180,cabinX:126,cabinW:278,nose:38,roof:104,van:true}}
  return map[key]||map.compact;
 }
@@ -51,31 +50,42 @@ function mountPosition(m,g,i,total){
  if(m==="top")return [g.x+g.w*.56+spread,g.y+g.h*.5,0];
  return [g.x+g.w*.37+spread,g.y+g.h*.72,180];
 }
+function tireProfile(key){return {
+ standard:{key:"standard",w:27,h:36},heavy:{key:"heavy",w:32,h:40},puncture:{key:"puncture",w:35,h:44},solid:{key:"solid",w:31,h:38}
+ }[key]||{key:"standard",w:27,h:36}}
+function armorBadge(label,value,x,y,width=68){
+ const active=value>0,fill=active?"#151c24":"#11161c",stroke=active?"var(--armor-color)":"#46505d";
+ return `<g class="armorReadoutBadge ${active?"active":"empty"}" transform="translate(${x} ${y})"><rect width="${width}" height="22" rx="11" style="fill:${fill};stroke:${stroke}"/><text class="armorBadgeLabel" x="10" y="14">${label}</text><text class="armorBadgeValue" x="${width-9}" y="15">${value}</text></g>`;
+}
 function renderVehicle(d){
  const color=d.paintColor||"#d94b43",dark=shade(color,-52),light=shade(color,45),g=bodyGeometry(d.bodyKey),finish=d.paintFinish||"gloss";
- const tireType=(d.frontTireKey==="solid"||d.rearTireKey==="solid")?"solid":(d.frontTireKey==="puncture"||d.rearTireKey==="puncture")?"rugged":d.frontTireKey==="heavy"?"heavy":"standard";
- const armorPts=Object.values(d.armor).reduce((a,b)=>a+b,0),armorLevel=armorPts>100?3:armorPts>65?2:armorPts>30?1:0;
+ const frontTire=tireProfile(d.frontTireKey),rearTire=tireProfile(d.rearTireKey),armorPts=Object.values(d.armor).reduce((a,b)=>a+b,0);
+ const armorColor={plastic:"#b9c5d2",fireproof:"#ef8a54",reflective:"#72dff6",lrfp:"#d19cf4",metal:"#e4e8ed"}[d.armorTypeKey]||"#b9c5d2";
  const byMount={};d.weapons.forEach(w=>(byMount[w.mount]??=[]).push(w));let weapons="";
  Object.entries(byMount).forEach(([m,arr])=>arr.forEach((w,i)=>{const [x,y,a]=mountPosition(m,g,i,arr.length);weapons+=weaponSymbol(w.weapon,x,y,a,m==="top"?1.08:.9)}));
- const wheelW=tireType==="rugged"?35:tireType==="solid"?31:tireType==="heavy"?32:27,wheelH=tireType==="rugged"?42:36;
- const wheel=(x,y)=>`<g class="wheel ${tireType}" transform="translate(${x} ${y})"><rect x="-${wheelW/2}" y="-${wheelH/2}" width="${wheelW}" height="${wheelH}" rx="10"/><path d="M-${wheelW/2+2} -10H${wheelW/2+2}M-${wheelW/2+2} 0H${wheelW/2+2}M-${wheelW/2+2} 10H${wheelW/2+2}"/></g>`;
+ const wheel=(x,y,tire,axle)=>`<g class="wheel ${tire.key} axle-${axle}" transform="translate(${x} ${y})"><rect x="-${tire.w/2}" y="-${tire.h/2}" width="${tire.w}" height="${tire.h}" rx="${tire.key==="solid"?8:10}"/><path class="tread" d="M-${tire.w/2+2} -11H${tire.w/2+2}M-${tire.w/2+2} 0H${tire.w/2+2}M-${tire.w/2+2} 11H${tire.w/2+2}"/><circle class="hubCap" r="5"/><title>${axle==="front"?"Front":"Rear"} ${D.tires[axle==="front"?d.frontTireKey:d.rearTireKey].name} tire</title></g>`;
  let bodyPath=`M${g.x+g.nose} ${g.y} Q${g.x+6} ${g.y+8} ${g.x} ${g.y+g.h*.36}V${g.y+g.h*.68}Q${g.x+8} ${g.y+g.h-5} ${g.x+g.nose} ${g.y+g.h}H${g.x+g.w-30}Q${g.x+g.w} ${g.y+g.h-12} ${g.x+g.w} ${g.y+g.h*.5}Q${g.x+g.w} ${g.y+12} ${g.x+g.w-30} ${g.y}Z`;
- let cabin= g.pickup?`<path class="cabin" d="M${g.cabinX} ${g.y+18}H${g.cabinX+g.cabinW}Q${g.cabinX+g.cabinW+18} ${g.y+g.h/2} ${g.cabinX+g.cabinW} ${g.y+g.h-18}H${g.cabinX}Q${g.cabinX-17} ${g.y+g.h/2} ${g.cabinX} ${g.y+18}Z"/><rect class="truckBed" x="${g.cabinX-75}" y="${g.y+20}" width="64" height="${g.h-40}" rx="7"/>`:
+ let cabin= g.pickup?`<rect class="truckBed" x="${g.x+23}" y="${g.y+18}" width="${g.cabinX-g.x-43}" height="${g.h-36}" rx="9"/><path class="bedRails" d="M${g.x+38} ${g.y+29}H${g.cabinX-31}V${g.y+g.h-29}H${g.x+38}Z"/><path class="cabin" d="M${g.cabinX} ${g.y+18}H${g.cabinX+g.cabinW}Q${g.cabinX+g.cabinW+18} ${g.y+g.h/2} ${g.cabinX+g.cabinW} ${g.y+g.h-18}H${g.cabinX}Q${g.cabinX-17} ${g.y+g.h/2} ${g.cabinX} ${g.y+18}Z"/><path class="hoodVent" d="M${g.cabinX+g.cabinW+31} ${g.y+45}H${g.x+g.w-28}M${g.cabinX+g.cabinW+31} ${g.y+g.h-45}H${g.x+g.w-28}"/>`:
  `<path class="cabin" d="M${g.cabinX} ${g.y+16}H${g.cabinX+g.cabinW}Q${g.cabinX+g.cabinW+20} ${g.y+g.h/2} ${g.cabinX+g.cabinW} ${g.y+g.h-16}H${g.cabinX}Q${g.cabinX-18} ${g.y+g.h/2} ${g.cabinX} ${g.y+16}Z"/>`;
  if(g.van||g.camper) cabin=`<path class="cabin vanCabin" d="M${g.cabinX} ${g.y+10}H${g.cabinX+g.cabinW-8}Q${g.cabinX+g.cabinW+10} ${g.y+g.h/2} ${g.cabinX+g.cabinW-8} ${g.y+g.h-10}H${g.cabinX}Q${g.cabinX-16} ${g.y+g.h/2} ${g.cabinX} ${g.y+10}Z"/><path class="panelLine" d="M${g.cabinX+95} ${g.y+13}V${g.y+g.h-13}"/>`;
- let armor="";if(armorLevel) armor=`<g class="armorLayer level${armorLevel}"><path d="${bodyPath}"/><path class="armorSeam" d="M${g.x+38} ${g.y+8}V${g.y+g.h-8}M${g.x+g.w-50} ${g.y+8}V${g.y+g.h-8}"/>${armorLevel>1?`<path class="armorSeam" d="M${g.x+85} ${g.y+5}V${g.y+g.h-5}M${g.x+g.w-95} ${g.y+5}V${g.y+g.h-5}"/>`:""}</g>`;
- const svg=`<svg viewBox="0 0 520 310" role="img" aria-label="${esc(d.bodyName)} with ${d.weapons.length} mounted weapons"><defs><linearGradient id="paint" x1="0" x2="1"><stop stop-color="${light}"/><stop offset=".46" stop-color="${color}"/><stop offset="1" stop-color="${dark}"/></linearGradient><linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#bde9ff" stop-opacity=".82"/><stop offset=".45" stop-color="#263c50"/><stop offset="1" stop-color="#0b121a"/></linearGradient><filter id="shadow"><feGaussianBlur stdDeviation="8"/></filter><filter id="glow"><feGaussianBlur stdDeviation="3"/></filter></defs>
- <ellipse class="carShadow" cx="260" cy="245" rx="190" ry="25"/>
- <g class="carModel view-${currentView} finish-${finish}">
- ${wheel(g.x+72,g.y-4)}${wheel(g.x+72,g.y+g.h+4)}${wheel(g.x+g.w-75,g.y-4)}${wheel(g.x+g.w-75,g.y+g.h+4)}
- <path class="bodyShell" d="${bodyPath}"/>${armor}${cabin}
+ const stroke=v=>Math.min(16,3+Math.sqrt(Math.max(0,v))*1.8),opacity=v=>v?Math.min(.95,.48+v/90):0;
+ const plate=(side,path)=>`<path class="armorPlate armor-${side}" d="${path}" style="--plate-width:${stroke(d.armor[side])};opacity:${opacity(d.armor[side])}"><title>${side} armor: ${d.armor[side]} points</title></path>`;
+ const armor=`<g class="armorZones" style="--armor-color:${armorColor}">${plate("front",`M${g.x+g.w-5} ${g.y+28}V${g.y+g.h-28}`)}${plate("back",`M${g.x+5} ${g.y+31}V${g.y+g.h-31}`)}${plate("left",`M${g.x+g.nose+8} ${g.y+4}Q${g.x+g.w*.55} ${g.y-4} ${g.x+g.w-37} ${g.y+6}`)}${plate("right",`M${g.x+g.nose+8} ${g.y+g.h-4}Q${g.x+g.w*.55} ${g.y+g.h+4} ${g.x+g.w-37} ${g.y+g.h-6}`)}</g>`;
+ const topArmor=d.armor.top?`<path class="topArmor" style="--armor-color:${armorColor};opacity:${opacity(d.armor.top)}" d="M${g.cabinX+32} ${g.y+35}H${g.cabinX+Math.max(48,g.cabinW-38)}Q${g.cabinX+Math.max(62,g.cabinW-20)} ${g.y+g.h/2} ${g.cabinX+Math.max(48,g.cabinW-38)} ${g.y+g.h-35}H${g.cabinX+32}Q${g.cabinX+18} ${g.y+g.h/2} ${g.cabinX+32} ${g.y+35}Z"><title>Top armor: ${d.armor.top} points</title></path>`:"";
+ const underArmor=d.armor.under?`<path class="underArmor" style="--armor-color:${armorColor};opacity:${opacity(d.armor.under)}" d="M${g.x+76} ${g.y+g.h/2}H${g.x+g.w-70}"><title>Underbody armor: ${d.armor.under} points</title></path>`:"";
+ const armorReadouts=`<g class="armorReadouts" style="--armor-color:${armorColor}">${armorBadge("BACK",d.armor.back,1,140,72)}${armorBadge("FRONT",d.armor.front,447,140,72)}${armorBadge("LEFT",d.armor.left,122,34,70)}${armorBadge("RIGHT",d.armor.right,320,246,72)}${armorBadge("TOP",d.armor.top,190,275,66)}${armorBadge("UNDER",d.armor.under,262,275,78)}</g>`;
+ const svg=`<svg viewBox="0 0 520 310" role="img" aria-label="Top-down ${esc(d.bodyName)} with ${d.weapons.length} mounted weapons and ${armorPts} armor points"><defs><linearGradient id="paint" x1="0" x2="1"><stop stop-color="${light}"/><stop offset=".46" stop-color="${color}"/><stop offset="1" stop-color="${dark}"/></linearGradient><linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#bde9ff" stop-opacity=".82"/><stop offset=".45" stop-color="#263c50"/><stop offset="1" stop-color="#0b121a"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="3"/></filter></defs>
+ <g class="carModel finish-${finish}">
+ ${wheel(g.x+72,g.y-4,rearTire,"rear")}${wheel(g.x+72,g.y+g.h+4,rearTire,"rear")}${wheel(g.x+g.w-75,g.y-4,frontTire,"front")}${wheel(g.x+g.w-75,g.y+g.h+4,frontTire,"front")}
+ ${underArmor}<path class="bodyShell" d="${bodyPath}"/>${armor}${cabin}
  <path class="windshield" d="M${g.cabinX+g.cabinW-12} ${g.y+21}Q${g.cabinX+g.cabinW+6} ${g.y+g.h/2} ${g.cabinX+g.cabinW-12} ${g.y+g.h-21}L${g.cabinX+g.cabinW-47} ${g.y+g.h-28}Q${g.cabinX+g.cabinW-35} ${g.y+g.h/2} ${g.cabinX+g.cabinW-47} ${g.y+28}Z"/>
  <path class="rearGlass" d="M${g.cabinX+12} ${g.y+25}Q${g.cabinX-3} ${g.y+g.h/2} ${g.cabinX+12} ${g.y+g.h-25}L${g.cabinX+42} ${g.y+g.h-30}Q${g.cabinX+31} ${g.y+g.h/2} ${g.cabinX+42} ${g.y+30}Z"/>
+ ${topArmor}
  <path class="highlight" d="M${g.x+36} ${g.y+15}Q${g.x+g.w*.55} ${g.y-2} ${g.x+g.w-38} ${g.y+17}"/>
  <g class="bumper"><path d="M${g.x+g.w-3} ${g.y+25}V${g.y+g.h-25}"/><path d="M${g.x+3} ${g.y+30}V${g.y+g.h-30}"/></g>
  ${weapons}<g class="details"><circle cx="${g.x+g.w-8}" cy="${g.y+34}" r="7"/><circle cx="${g.x+g.w-8}" cy="${g.y+g.h-34}" r="7"/><path d="M${g.x+g.w-20} ${g.y+g.h/2-18}V${g.y+g.h/2+18}"/></g>
- </g></svg>`;
- $("vehicleArt").innerHTML=svg;$("showcaseName").textContent=d.name;$("visualBodyLabel").textContent=d.bodyName.toUpperCase();$("visualLoadout").textContent=`${d.weapons.length} mounted system${d.weapons.length===1?"":"s"}`;$("paintHex").textContent=color.toUpperCase();document.documentElement.style.setProperty("--carPaint",color);
+ </g>${armorReadouts}</svg>`;
+ $("vehicleArt").innerHTML=svg;$("showcaseName").textContent=d.name;$("visualBodyLabel").textContent=d.bodyName.toUpperCase();$("visualArmorTotal").textContent=`${armorPts} pts`;$("visualLoadout").textContent=d.weapons.length;$("frontTireVisual").textContent=D.tires[d.frontTireKey].name;$("rearTireVisual").textContent=D.tires[d.rearTireKey].name;$("paintHex").textContent=color.toUpperCase();document.documentElement.style.setProperty("--carPaint",color);document.documentElement.style.setProperty("--armorColor",armorColor);
 }
 function calculate(){
 const body=D.bodies[$("bodyType").value],ch=D.chassis[$("chassisType").value],su=D.suspensions[$("suspensionType").value],p=D.plants[$("plantType").value],ft=D.tires[$("frontTires").value],rt=D.tires[$("rearTires").value],at=D.armorTypes[$("armorType").value],a=armor();

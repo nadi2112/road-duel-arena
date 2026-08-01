@@ -1,15 +1,20 @@
-# Road Duel Arena v0.5.0
+# Road Duel Arena v0.5.1
 
 Open `index.html` directly in a modern browser.
 
-## v0.5.0 highlights
+## v0.5.1 highlights
 
 - New layered SVG vehicle renderer in the Garage.
 - Nine body silhouettes change live with the selected body type.
 - Mounted weapons are drawn at their selected front, rear, left, right, top, or underbody positions.
 - Dynamic paint color and gloss, metallic, or matte finishes.
 - Visual tire, armor, pickup-bed, van, wagon, and camper treatments.
-- Three-quarter and top-view presentation modes with animated installation feedback.
+- Compact top-down live build now sits above the sticky Design Summary.
+- Front and rear tire choices render independently with distinct tread, size, and sidewall treatments.
+- Front, back, left, right, top, and underbody armor render independently with numeric point badges.
+- Pickup proportions now use a larger bed, compact cab, and shorter hood.
+- Workshop presentation no longer uses the three-quarter transform or circular turntable.
+- Animated installation, scan-light, and live-status feedback keep the build bay active without obscuring the car.
 - Visual configuration is saved with each vehicle design.
 
 ## Existing major systems

@@ -1,7 +1,7 @@
 Road Duel Arena
 Game Design & Technical Design Document
 Document Version: 1.5
-Game Version: v0.5.0
+Game Version: v0.5.1
 Next Milestone: combat targeting and fire mechanics refinement
 
 1. Project Overview
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.5.0.
+The current stable baseline is v0.5.1.
 Major implemented systems include:
 Arena movement
 Basic vehicle combat

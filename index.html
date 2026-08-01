@@ -1,21 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.5.0</title><link rel="stylesheet" href="styles.css"></head><body>
-<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.5.0 Visual Garage</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.5.1</title><link rel="stylesheet" href="styles.css"></head><body>
+<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.5.1 Directional Garage</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
 <main>
-<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.5 introduces a live graphical workshop where every body, weapon mount, tire, armor package, and paint choice changes your car on screen.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
+<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.5.1 sharpens the live graphical workshop with true front/rear tire rendering, six-zone armor readouts, and a clearer top-down vehicle silhouette.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
 
 <section id="garage" class="screen">
 <div class="sectionHead"><div><div class="eyebrow">VEHICLE DESIGN</div><h2>Garage</h2></div><div><button id="newVehicle">New Design</button> <button id="saveVehicle" class="primary">Save Vehicle</button></div></div>
 <div class="garageGrid"><div class="buildColumn">
-<div class="garageShowcase panel">
-  <div class="showcaseHeader"><div><div class="eyebrow">LIVE BUILD BAY</div><h3 id="showcaseName">Blue Comet</h3></div><div class="viewControls"><button class="viewBtn selected" data-view="threeQuarter">3/4 View</button><button class="viewBtn" data-view="top">Top View</button></div></div>
-  <div class="workshopScene">
-    <div class="garageGlow"></div><div class="garageGridFloor"></div>
-    <div id="vehicleArt" class="vehicleArt" aria-label="Live graphical vehicle preview"></div>
-    <div class="turntable"><i></i></div>
-    <div class="bayLabel"><span>BUILD BAY 05</span><strong id="visualBodyLabel">COMPACT</strong></div>
-  </div>
-  <div class="visualLegend"><span><i class="legendPaint"></i>Paint</span><span><i class="legendArmor"></i>Armor</span><span><i class="legendWeapon"></i>Weapons</span><span id="visualLoadout">1 mounted system</span></div>
-</div>
 <div class="panel"><h3>Identity & Core</h3><div class="formGrid">
 <label>Name<input id="vehicleName" value="Blue Comet"></label><label>Budget<input id="budget" type="number" value="15000" step="500"></label><label>Paint color<div class="paintField"><input id="paintColor" type="color" value="#d94b43"><span id="paintHex">#D94B43</span></div></label><label>Finish<select id="paintFinish"><option value="gloss">Arena Gloss</option><option value="metallic">Metal Flake</option><option value="matte">Wasteland Matte</option></select></label>
 <label>Body<select id="bodyType"></select></label><label>Chassis<select id="chassisType"></select></label>
@@ -26,12 +16,23 @@
 <div class="panel"><h3>Armor</h3><label>Armor type<select id="armorType"></select></label><div class="armorGrid">
 <label>Front<input class="armorInput" data-side="front" type="number" value="20" min="0"></label><label>Right<input class="armorInput" data-side="right" type="number" value="10" min="0"></label><label>Left<input class="armorInput" data-side="left" type="number" value="10" min="0"></label><label>Back<input class="armorInput" data-side="back" type="number" value="15" min="0"></label><label>Top<input class="armorInput" data-side="top" type="number" value="5" min="0"></label><label>Under<input class="armorInput" data-side="under" type="number" value="5" min="0"></label></div></div>
 <div class="panel"><div class="panelTitleRow"><h3>Weapons</h3><button id="addWeapon">Add Weapon</button></div><div id="weaponRows"></div><p class="hint">Loaded weapon cost, weight, space, and ammunition are used. One direction may use no more than one-third of vehicle spaces.</p></div>
-</div><aside><div class="panel sticky"><h3>Design Summary</h3><div id="validBadge" class="badge"></div>
+</div><aside><div class="panel sticky summaryPanel">
+<div class="summaryVisual">
+  <div class="showcaseHeader"><div><div class="eyebrow">LIVE BUILD · TOP DOWN</div><h3 id="showcaseName">Blue Comet</h3></div><span class="liveIndicator"><i></i>LIVE</span></div>
+  <div class="workshopScene">
+    <div class="garageGlow"></div><div class="garageGridFloor"></div><div class="bayRails"></div>
+    <div id="vehicleArt" class="vehicleArt" aria-label="Live top-down graphical vehicle preview"></div>
+    <div class="bayLabel"><span>BUILD BAY 05</span><strong id="visualBodyLabel">COMPACT</strong></div>
+  </div>
+  <div class="visualLegend"><span><i class="legendPaint"></i>Paint</span><span><i class="legendArmor"></i><b id="visualArmorTotal">65 pts</b> armor</span><span><i class="legendWeapon"></i><b id="visualLoadout">1</b> system</span></div>
+  <div class="tireReadout"><span><small>FRONT TIRES</small><strong id="frontTireVisual">Puncture-Resistant</strong></span><span><small>REAR TIRES</small><strong id="rearTireVisual">Puncture-Resistant</strong></span></div>
+</div>
+<div class="summaryBody"><div class="summaryTitle"><h3>Design Summary</h3><div id="validBadge" class="badge"></div></div>
 <div class="meterBlock"><div><span>Weight</span><strong id="weightText"></strong></div><div class="meter"><i id="weightMeter"></i></div></div>
 <div class="meterBlock"><div><span>Spaces</span><strong id="spaceText"></strong></div><div class="meter"><i id="spaceMeter"></i></div></div>
 <div class="meterBlock"><div><span>Cost</span><strong id="costText"></strong></div><div class="meter"><i id="costMeter"></i></div></div>
 <div class="statGrid"><div><b id="acceleration"></b><span>Acceleration</span></div><div><b id="topSpeed"></b><span>Top speed</span></div><div><b id="handlingClass"></b><span>Handling class</span></div><div><b id="powerFactors"></b><span>Power factors</span></div></div>
-<h4>Validation</h4><ul id="validation"></ul><h4>Saved Vehicles</h4><div id="savedVehicles"></div></div></aside></div></section>
+<h4>Validation</h4><ul id="validation"></ul><h4>Saved Vehicles</h4><div id="savedVehicles"></div></div></div></aside></div></section>
 <section id="arenaSetup" class="screen"><div class="sectionHead"><div><div class="eyebrow">MATCH CONTROL</div><h2>Arena Setup</h2></div></div><div class="setupGrid">
 <div class="panel"><h3>Your Vehicle</h3><select id="playerVehicle"></select><div id="playerPreview" class="vehiclePreview"></div></div>
 <div class="panel"><h3>AI Vehicle</h3><select id="aiVehicle"></select><div id="aiPreview" class="vehiclePreview"></div></div>
@@ -140,4 +141,4 @@
     </section>
   </aside>
 </section></main>
-<script src="src/data.js?v=0.5.0"></script><script src="src/garage.js?v=0.5.0"></script><script src="src/app.js?v=0.5.0"></script><script src="src/arena.js?v=0.5.0"></script></body></html>
+<script src="src/data.js?v=0.5.1"></script><script src="src/garage.js?v=0.5.1"></script><script src="src/app.js?v=0.5.1"></script><script src="src/arena.js?v=0.5.1"></script></body></html>
