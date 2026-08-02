@@ -1,7 +1,7 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.5.2</title><link rel="stylesheet" href="styles.css?v=0.5.2"></head><body>
-<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.5.2 Garage Clarity</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.5.1</title><link rel="stylesheet" href="styles.css?v=0.5.1-stable"></head><body>
+<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.5.1 Directional Garage</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
 <main>
-<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.5.2 gives the garage a larger, upright vehicle view, a wider visual summary, and clean six-zone armor numbers that stay out of the artwork.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
+<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.5.1 sharpens the live graphical workshop with true front/rear tire rendering, six-zone armor readouts, and a clearer top-down vehicle silhouette.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
 
 <section id="garage" class="screen">
 <div class="sectionHead"><div><div class="eyebrow">VEHICLE DESIGN</div><h2>Garage</h2></div><div><button id="newVehicle">New Design</button> <button id="saveVehicle" class="primary">Save Vehicle</button></div></div>
@@ -21,20 +21,8 @@
   <div class="showcaseHeader"><div><div class="eyebrow">LIVE BUILD · TOP DOWN</div><h3 id="showcaseName">Blue Comet</h3></div><span class="liveIndicator"><i></i>LIVE</span></div>
   <div class="workshopScene">
     <div class="garageGlow"></div><div class="garageGridFloor"></div><div class="bayRails"></div>
-    <div class="frontMarker"><span>▲</span> FRONT</div>
     <div id="vehicleArt" class="vehicleArt" aria-label="Live top-down graphical vehicle preview"></div>
     <div class="bayLabel"><span>BUILD BAY 05</span><strong id="visualBodyLabel">COMPACT</strong></div>
-  </div>
-  <div class="armorDashboard">
-    <div class="armorDashboardHead"><span>ARMOR ZONES</span><strong id="visualArmorType">Plastic</strong></div>
-    <div class="armorZoneGrid">
-      <div><small>FRONT</small><strong id="armorFrontValue">20</strong></div>
-      <div><small>LEFT</small><strong id="armorLeftValue">10</strong></div>
-      <div><small>RIGHT</small><strong id="armorRightValue">10</strong></div>
-      <div><small>REAR</small><strong id="armorRearValue">15</strong></div>
-      <div><small>TOP</small><strong id="armorTopValue">5</strong></div>
-      <div><small>UNDER</small><strong id="armorUnderValue">5</strong></div>
-    </div>
   </div>
   <div class="visualLegend"><span><i class="legendPaint"></i>Paint</span><span><i class="legendArmor"></i><b id="visualArmorTotal">65 pts</b> armor</span><span><i class="legendWeapon"></i><b id="visualLoadout">1</b> system</span></div>
   <div class="tireReadout"><span><small>FRONT TIRES</small><strong id="frontTireVisual">Puncture-Resistant</strong></span><span><small>REAR TIRES</small><strong id="rearTireVisual">Puncture-Resistant</strong></span></div>
@@ -153,4 +141,4 @@
     </section>
   </aside>
 </section></main>
-<script src="src/data.js?v=0.5.2"></script><script src="src/garage.js?v=0.5.2"></script><script src="src/app.js?v=0.5.2"></script><script src="src/arena.js?v=0.5.2"></script></body></html>
+<script src="src/data.js?v=0.5.1"></script><script src="src/garage.js?v=0.5.1"></script><script src="src/app.js?v=0.5.1"></script><script src="src/arena.js?v=0.5.1"></script></body></html>
