@@ -1,12 +1,23 @@
 # Changelog
 
+## v0.5.2 — Garage Clarity
+
+- Rebalanced the Garage so the controls use less width and the live preview and Design Summary use more.
+- Rotated the top-down vehicle to a consistent front-up orientation.
+- Enlarged the car and converted the horizontal bay into an upright inspection bay.
+- Removed the six small armor bubbles from around the car.
+- Added a clean, high-contrast six-zone armor strip with large numeric values.
+- Preserved independent front, rear, left, right, top, and underbody armor graphics.
+- Moved the front marker away from the centerline so mounted weapons cannot cover it.
+- Visually tested a pickup with mismatched front/rear tires and deliberately uneven armor values.
+
 ## v0.5.1 — Directional Garage
 
 - Moved the smaller live vehicle preview above the sticky Design Summary.
 - Removed the three-quarter view and circular turntable in favor of one clear top-down inspection view.
 - Fixed front and rear tire graphics so each axle reflects its own selected tire type.
 - Replaced the summed armor outline with independent front, back, left, right, top, and underbody treatments.
-- Added six always-visible numeric armor point readouts around the vehicle.
+- Added six numeric armor point readouts around the vehicle; these were replaced by the cleaner readout strip in v0.5.2.
 - Rebalanced pickup geometry with a much larger bed and shorter hood.
 - Added axle labels, armor-type coloring, bay rails, a restrained scan effect, and improved vehicle surface details.
 

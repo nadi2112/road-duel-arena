@@ -53,10 +53,6 @@ function mountPosition(m,g,i,total){
 function tireProfile(key){return {
  standard:{key:"standard",w:27,h:36},heavy:{key:"heavy",w:32,h:40},puncture:{key:"puncture",w:35,h:44},solid:{key:"solid",w:31,h:38}
  }[key]||{key:"standard",w:27,h:36}}
-function armorBadge(label,value,x,y,width=68){
- const active=value>0,fill=active?"#151c24":"#11161c",stroke=active?"var(--armor-color)":"#46505d";
- return `<g class="armorReadoutBadge ${active?"active":"empty"}" transform="translate(${x} ${y})"><rect width="${width}" height="22" rx="11" style="fill:${fill};stroke:${stroke}"/><text class="armorBadgeLabel" x="10" y="14">${label}</text><text class="armorBadgeValue" x="${width-9}" y="15">${value}</text></g>`;
-}
 function renderVehicle(d){
  const color=d.paintColor||"#d94b43",dark=shade(color,-52),light=shade(color,45),g=bodyGeometry(d.bodyKey),finish=d.paintFinish||"gloss";
  const frontTire=tireProfile(d.frontTireKey),rearTire=tireProfile(d.rearTireKey),armorPts=Object.values(d.armor).reduce((a,b)=>a+b,0);
@@ -73,9 +69,8 @@ function renderVehicle(d){
  const armor=`<g class="armorZones" style="--armor-color:${armorColor}">${plate("front",`M${g.x+g.w-5} ${g.y+28}V${g.y+g.h-28}`)}${plate("back",`M${g.x+5} ${g.y+31}V${g.y+g.h-31}`)}${plate("left",`M${g.x+g.nose+8} ${g.y+4}Q${g.x+g.w*.55} ${g.y-4} ${g.x+g.w-37} ${g.y+6}`)}${plate("right",`M${g.x+g.nose+8} ${g.y+g.h-4}Q${g.x+g.w*.55} ${g.y+g.h+4} ${g.x+g.w-37} ${g.y+g.h-6}`)}</g>`;
  const topArmor=d.armor.top?`<path class="topArmor" style="--armor-color:${armorColor};opacity:${opacity(d.armor.top)}" d="M${g.cabinX+32} ${g.y+35}H${g.cabinX+Math.max(48,g.cabinW-38)}Q${g.cabinX+Math.max(62,g.cabinW-20)} ${g.y+g.h/2} ${g.cabinX+Math.max(48,g.cabinW-38)} ${g.y+g.h-35}H${g.cabinX+32}Q${g.cabinX+18} ${g.y+g.h/2} ${g.cabinX+32} ${g.y+35}Z"><title>Top armor: ${d.armor.top} points</title></path>`:"";
  const underArmor=d.armor.under?`<path class="underArmor" style="--armor-color:${armorColor};opacity:${opacity(d.armor.under)}" d="M${g.x+76} ${g.y+g.h/2}H${g.x+g.w-70}"><title>Underbody armor: ${d.armor.under} points</title></path>`:"";
- const armorReadouts=`<g class="armorReadouts" style="--armor-color:${armorColor}">${armorBadge("BACK",d.armor.back,1,140,72)}${armorBadge("FRONT",d.armor.front,447,140,72)}${armorBadge("LEFT",d.armor.left,122,34,70)}${armorBadge("RIGHT",d.armor.right,320,246,72)}${armorBadge("TOP",d.armor.top,190,275,66)}${armorBadge("UNDER",d.armor.under,262,275,78)}</g>`;
- const svg=`<svg viewBox="0 0 520 310" role="img" aria-label="Top-down ${esc(d.bodyName)} with ${d.weapons.length} mounted weapons and ${armorPts} armor points"><defs><linearGradient id="paint" x1="0" x2="1"><stop stop-color="${light}"/><stop offset=".46" stop-color="${color}"/><stop offset="1" stop-color="${dark}"/></linearGradient><linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#bde9ff" stop-opacity=".82"/><stop offset=".45" stop-color="#263c50"/><stop offset="1" stop-color="#0b121a"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="3"/></filter></defs>
- <g class="carModel finish-${finish}">
+ const svg=`<svg viewBox="0 0 400 500" role="img" aria-label="Top-down ${esc(d.bodyName)}, front facing up, with ${d.weapons.length} mounted weapons and ${armorPts} armor points"><defs><linearGradient id="paint" x1="0" x2="1"><stop stop-color="${light}"/><stop offset=".46" stop-color="${color}"/><stop offset="1" stop-color="${dark}"/></linearGradient><linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#bde9ff" stop-opacity=".82"/><stop offset=".45" stop-color="#263c50"/><stop offset="1" stop-color="#0b121a"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="3"/></filter></defs>
+ <g class="carStage" transform="translate(25 510) rotate(-90) scale(1.05 1.15)"><g class="carModel finish-${finish}">
  ${wheel(g.x+72,g.y-4,rearTire,"rear")}${wheel(g.x+72,g.y+g.h+4,rearTire,"rear")}${wheel(g.x+g.w-75,g.y-4,frontTire,"front")}${wheel(g.x+g.w-75,g.y+g.h+4,frontTire,"front")}
  ${underArmor}<path class="bodyShell" d="${bodyPath}"/>${armor}${cabin}
  <path class="windshield" d="M${g.cabinX+g.cabinW-12} ${g.y+21}Q${g.cabinX+g.cabinW+6} ${g.y+g.h/2} ${g.cabinX+g.cabinW-12} ${g.y+g.h-21}L${g.cabinX+g.cabinW-47} ${g.y+g.h-28}Q${g.cabinX+g.cabinW-35} ${g.y+g.h/2} ${g.cabinX+g.cabinW-47} ${g.y+28}Z"/>
@@ -84,8 +79,8 @@ function renderVehicle(d){
  <path class="highlight" d="M${g.x+36} ${g.y+15}Q${g.x+g.w*.55} ${g.y-2} ${g.x+g.w-38} ${g.y+17}"/>
  <g class="bumper"><path d="M${g.x+g.w-3} ${g.y+25}V${g.y+g.h-25}"/><path d="M${g.x+3} ${g.y+30}V${g.y+g.h-30}"/></g>
  ${weapons}<g class="details"><circle cx="${g.x+g.w-8}" cy="${g.y+34}" r="7"/><circle cx="${g.x+g.w-8}" cy="${g.y+g.h-34}" r="7"/><path d="M${g.x+g.w-20} ${g.y+g.h/2-18}V${g.y+g.h/2+18}"/></g>
- </g>${armorReadouts}</svg>`;
- $("vehicleArt").innerHTML=svg;$("showcaseName").textContent=d.name;$("visualBodyLabel").textContent=d.bodyName.toUpperCase();$("visualArmorTotal").textContent=`${armorPts} pts`;$("visualLoadout").textContent=d.weapons.length;$("frontTireVisual").textContent=D.tires[d.frontTireKey].name;$("rearTireVisual").textContent=D.tires[d.rearTireKey].name;$("paintHex").textContent=color.toUpperCase();document.documentElement.style.setProperty("--carPaint",color);document.documentElement.style.setProperty("--armorColor",armorColor);
+ </g></g></svg>`;
+ $("vehicleArt").innerHTML=svg;$("showcaseName").textContent=d.name;$("visualBodyLabel").textContent=d.bodyName.toUpperCase();$("visualArmorTotal").textContent=`${armorPts} pts`;$("visualArmorType").textContent=D.armorTypes[d.armorTypeKey].name;$("visualLoadout").textContent=d.weapons.length;$("frontTireVisual").textContent=D.tires[d.frontTireKey].name;$("rearTireVisual").textContent=D.tires[d.rearTireKey].name;Object.entries({front:"armorFrontValue",back:"armorRearValue",left:"armorLeftValue",right:"armorRightValue",top:"armorTopValue",under:"armorUnderValue"}).forEach(([side,id])=>$(id).textContent=d.armor[side]);$("paintHex").textContent=color.toUpperCase();document.documentElement.style.setProperty("--carPaint",color);document.documentElement.style.setProperty("--armorColor",armorColor);
 }
 function calculate(){
 const body=D.bodies[$("bodyType").value],ch=D.chassis[$("chassisType").value],su=D.suspensions[$("suspensionType").value],p=D.plants[$("plantType").value],ft=D.tires[$("frontTires").value],rt=D.tires[$("rearTires").value],at=D.armorTypes[$("armorType").value],a=armor();

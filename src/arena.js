@@ -84,7 +84,7 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.5.1",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.5.2",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
