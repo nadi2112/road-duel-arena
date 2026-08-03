@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.1 - Sustained Contact Fix
+
+- Fixed equal-speed rear contact incorrectly combining Temporary Speed values and raising both vehicles to a phantom 20 mph.
+- Zero-relative-speed contact no longer causes collision damage, concussion checks, or D1 hazards.
+- Vehicles in continuous contact now move together when the path is clear.
+- A pushing vehicle and a lead vehicle pinned against a barrier or wall now both stop.
+- Contact persistence now uses the oriented vehicle and barrier outlines instead of an approximate center-distance threshold.
+- Added regression coverage for equal-speed contact and blocked pushing.
+
 ## v0.6.0 - Chapter 2 Driving and Collisions
 
 - Added the remaining car maneuvers: steep drifts, swerves, controlled skids, bootlegger reverses, T-stops, and pivots.

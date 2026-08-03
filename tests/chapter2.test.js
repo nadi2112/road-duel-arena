@@ -49,6 +49,21 @@ test("the four collision procedures calculate their distinct speeds", () => {
   assert.deepEqual([swipe.speed1, swipe.speed2], [60, 20]);
 });
 
+test("equal-speed contact stays sustained instead of creating phantom speed or hazards", () => {
+  const rearEnd = rules.collisionSpeeds("rearEnd", 15, 15, 2 / 3, 1);
+  assert.equal(rearEnd.collisionSpeed, 0);
+  assert.equal(rearEnd.sustained, true);
+  assert.deepEqual([rearEnd.speed1, rearEnd.speed2], [15, 15]);
+  assert.equal(rules.collisionHazard("rearEnd", 15, 15), 0);
+});
+
+test("sustained contact pushes when clear and halts when the lead car is blocked", () => {
+  assert.equal(rules.contactAction({ activeContact: true, collisionSpeed: 0, movingToward: true, pushedBlocked: false }), "push");
+  assert.equal(rules.contactAction({ activeContact: true, collisionSpeed: 0, movingToward: true, pushedBlocked: true }), "halt");
+  assert.equal(rules.contactAction({ activeContact: true, collisionSpeed: 0, movingToward: false, pushedBlocked: true }), "separate");
+  assert.equal(rules.contactAction({ activeContact: false, collisionSpeed: 25, movingToward: true, pushedBlocked: false }), "impact");
+});
+
 test("impact orientation classifies all four collision types", () => {
   assert.equal(rules.classifyCollision({attackerFace:"front",defenderFace:"front",attackerMotion:0,defenderMotion:180}), "headOn");
   assert.equal(rules.classifyCollision({attackerFace:"front",defenderFace:"back",attackerMotion:0,defenderMotion:0}), "rearEnd");

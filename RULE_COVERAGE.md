@@ -1,4 +1,4 @@
-# Rule Coverage v0.6.0
+# Rule Coverage v0.6.1
 
 ## Chapter 2 movement and control
 
@@ -25,7 +25,8 @@
 - Correct affected armor faces and metal-armor collision absorption
 - Post-impact speed transfer, handling hazards, and control rolls
 - Fixed-object rams, destructible barriers, and wall impacts
-- Continuous-contact suppression so one impact is not charged repeatedly
+- Continuous-contact pushing and suppression so one impact is not charged repeatedly
+- Blocked-push halting when a lead vehicle is pinned against a barrier or wall
 - Impact markers, combat-log explanations, and inspector readouts
 
 ## Computer-first approximations

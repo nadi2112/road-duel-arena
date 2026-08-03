@@ -120,8 +120,19 @@
       };
     }
     if (type === "rearEnd") {
+      const collisionSpeed = Math.abs(v1Speed - v2Speed);
+      if (collisionSpeed === 0) {
+        return {
+          collisionSpeed: 0,
+          temporary1: t1,
+          temporary2: t2,
+          speed1: v1Speed,
+          speed2: v2Speed,
+          sustained: true,
+        };
+      }
       return {
-        collisionSpeed: Math.abs(v1Speed - v2Speed),
+        collisionSpeed,
         temporary1: t1,
         temporary2: t2,
         speed1: t1 + t2,
@@ -139,6 +150,17 @@
     }
     const net = sameDirection ? Math.abs(v1Speed - v2Speed) : v1Speed + v2Speed;
     const swipeSpeed = roundUp5(net / 4);
+    if (swipeSpeed === 0) {
+      return {
+        collisionSpeed: 0,
+        swipeSpeed: 0,
+        temporary1: t1,
+        temporary2: t2,
+        speed1: v1Speed,
+        speed2: v2Speed,
+        sustained: true,
+      };
+    }
     return {
       collisionSpeed: swipeSpeed,
       swipeSpeed,
@@ -151,7 +173,14 @@
 
   function collisionHazard(type, originalSpeed, finalSpeed, swipeSpeed = 0) {
     const basis = type === "sideswipe" ? swipeSpeed : Math.abs(originalSpeed - finalSpeed);
+    if (basis <= 0) return 0;
     return Math.max(1, Math.ceil(basis / 10));
+  }
+
+  function contactAction({ activeContact = false, collisionSpeed = 0, movingToward = true, pushedBlocked = false } = {}) {
+    if (!movingToward) return "separate";
+    if (activeContact || collisionSpeed <= 0) return pushedBlocked ? "halt" : "push";
+    return "impact";
   }
 
   function classifyCollision({
@@ -263,6 +292,7 @@
     rollRamDamage,
     collisionSpeeds,
     collisionHazard,
+    contactAction,
     classifyCollision,
     controlledSkid,
     maneuverDifficulty,

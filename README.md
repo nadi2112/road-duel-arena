@@ -1,8 +1,8 @@
-# Road Duel Arena v0.6.0
+# Road Duel Arena v0.6.1
 
 Open `index.html` directly in a modern browser.
 
-## v0.6.0 highlights
+## v0.6.1 highlights
 
 - Preserves the approved v0.5.1 garage presentation and vehicle renderer.
 - Adds steep drifts, swerves, controlled skids, T-stops, bootlegger reverses, and 5 mph pivots.
@@ -12,6 +12,9 @@ Open `index.html` directly in a modern browser.
 - Applies collision damage to the correct armor faces, including metal-armor collision protection.
 - Adds fixed-object rams, destructible barriers, wall impacts, collision hazards, debris, and optional concussion checks.
 - Prevents repeated damage while vehicles remain in continuous contact.
+- Treats equal-speed contact as sustained pushing rather than a new collision.
+- Stops both vehicles when a pushed vehicle is pinned against a barrier or wall.
+- Keeps contact state from actual vehicle outlines so separating movement remains available.
 - Adds arena-surface handling modifiers and off-road wear.
 
 ## Preserved v0.5.1 garage highlights

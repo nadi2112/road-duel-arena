@@ -95,7 +95,7 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.6.0",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.6.1",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -131,17 +131,24 @@
   ];
   const debris=[];
   const activeContacts=new Set();
+  const movementConsumed=new Set();
   const impactMarks=[];
+  const CONTACT_GAP=4;
   function boxForCar(car){return{x:car.x,y:car.y,halfL:18,halfW:10,heading:car.heading}}
   function boxForRect(r){return{x:r.x+r.w/2,y:r.y+r.h/2,halfL:r.w/2,halfW:r.h/2,heading:0}}
   function boxAxes(box){const h=rad(box.heading);return[{x:Math.cos(h),y:Math.sin(h)},{x:-Math.sin(h),y:Math.cos(h)}]}
   function boxCorners(box){const [forward,side]=boxAxes(box);return[[-1,-1],[-1,1],[1,1],[1,-1]].map(([a,b])=>({x:box.x+forward.x*box.halfL*a+side.x*box.halfW*b,y:box.y+forward.y*box.halfL*a+side.y*box.halfW*b}))}
   function projected(corners,axis){const values=corners.map(p=>p.x*axis.x+p.y*axis.y);return{min:Math.min(...values),max:Math.max(...values)}}
   function boxesOverlap(a,b){const ac=boxCorners(a),bc=boxCorners(b),axes=[...boxAxes(a),...boxAxes(b)];return axes.every(axis=>{const ap=projected(ac,axis),bp=projected(bc,axis);return ap.max>=bp.min&&bp.max>=ap.min})}
+  function boxesWithinGap(a,b,gap=CONTACT_GAP){const ac=boxCorners(a),bc=boxCorners(b),axes=[...boxAxes(a),...boxAxes(b)];return axes.every(axis=>{const ap=projected(ac,axis),bp=projected(bc,axis);return ap.max+gap>=bp.min&&bp.max+gap>=ap.min})}
   function hitBarrier(car){return barriers.find(r=>!r.destroyed&&boxesOverlap(boxForCar(car),boxForRect(r)))}
   function collisionWall(car){
     const margin=18;
     return car.x<arena.x+margin||car.x>arena.x+arena.w-margin||car.y<arena.y+margin||car.y>arena.y+arena.h-margin;
+  }
+  function nearArenaWall(car,gap=CONTACT_GAP){
+    const corners=boxCorners(boxForCar(car)),xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);
+    return Math.min(...xs)<=arena.x+gap||Math.max(...xs)>=arena.x+arena.w-gap||Math.min(...ys)<=arena.y+gap||Math.max(...ys)>=arena.y+arena.h-gap;
   }
   function clampInsideArena(car){
     car.x=Math.min(Math.max(car.x,arena.x+19),arena.x+arena.w-19);
@@ -155,6 +162,11 @@
   function interpolateHeading(from,to,t){return norm(from+signedDelta(to,from)*t)}
   function sweepVehicleContact(car,other,previous){
     const final={x:car.x,y:car.y,heading:car.heading};
+    const previousCar={...car,x:previous.x,y:previous.y,heading:previous.heading??car.heading};
+    const movingAway=(final.x-previous.x)*(previous.x-other.x)+(final.y-previous.y)*(previous.y-other.y)>0;
+    if(boxesOverlap(boxForCar(previousCar),boxForCar(other))&&movingAway&&!boxesOverlap(boxForCar(final),boxForCar(other))){
+      car.x=final.x;car.y=final.y;car.heading=final.heading;return{hit:false,final};
+    }
     const distance=Math.hypot(final.x-previous.x,final.y-previous.y),steps=Math.max(1,Math.ceil(distance/3));
     let safe={x:previous.x,y:previous.y,heading:previous.heading??car.heading};
     for(let i=1;i<=steps;i++){
@@ -163,6 +175,35 @@
       safe={x:car.x,y:car.y,heading:car.heading};
     }
     car.x=final.x;car.y=final.y;car.heading=final.heading;return{hit:false,final};
+  }
+  function fixedPathBlock(vehicle,dx,dy){
+    const distance=Math.hypot(dx,dy),steps=Math.max(1,Math.ceil(distance/3));
+    for(let i=1;i<=steps;i++){
+      const t=i/steps,probe={...vehicle,x:vehicle.x+dx*t,y:vehicle.y+dy*t};
+      const object=hitBarrier(probe);if(object)return{object,isWall:false,contact:probe};
+      if(collisionWall(probe))return{object:null,isWall:true,contact:probe};
+    }
+    return null;
+  }
+  function fixedContactKey(vehicle,block){return`${vehicle.id}:${block.isWall?"wall":block.object.id}`}
+  function haltBlockedPair(car,other,block,sweep){
+    const moving1=car.speed>0,moving2=other.speed>0,key=fixedContactKey(other,block);
+    car.x=sweep.safe.x;car.y=sweep.safe.y;car.heading=sweep.safe.heading;
+    if(!activeContacts.has(key)){
+      const otherPrevious={x:other.x,y:other.y,heading:other.heading};
+      other.x=block.contact.x;other.y=block.contact.y;
+      fixedObjectCollision(other,block.object,otherPrevious,block.isWall);
+    }
+    car.speed=0;other.speed=0;endCrashAtHalt(car);endCrashAtHalt(other);
+    if(moving1||moving2)log(`${car.name} cannot push ${other.name} through ${block.isWall?"the arena wall":block.object.id}; both vehicles stop.`,"warn","movement");
+  }
+  function pushContactPair(car,other,sweep){
+    const dx=sweep.final.x-sweep.safe.x,dy=sweep.final.y-sweep.safe.y;
+    const block=fixedPathBlock(other,dx,dy);
+    if(block){haltBlockedPair(car,other,block,sweep);return"halt"}
+    car.x=sweep.final.x;car.y=sweep.final.y;car.heading=sweep.final.heading;
+    other.x+=dx;other.y+=dy;movementConsumed.add(other.id);
+    return"push";
   }
   function addImpactMark(x,y,label){impactMarks.push({x,y,label,until:performance.now()+1800});while(impactMarks.length>8)impactMarks.shift()}
   function applyConcussion(car,speedChange){
@@ -180,13 +221,24 @@
     vehicle.x+=Math.cos(rad(pusherHeading))*2;vehicle.y+=Math.sin(rad(pusherHeading))*2;
   }
   function resolveVehicleCollision(car,other,previous){
-    const sweep=sweepVehicleContact(car,other,previous);if(!sweep.hit){activeContacts.delete(contactKey(car,other));return false}
-    const key=contactKey(car,other);car.x=sweep.safe.x;car.y=sweep.safe.y;car.heading=sweep.safe.heading;
-    if(activeContacts.has(key))return true;activeContacts.add(key);
+    const sweep=sweepVehicleContact(car,other,previous),key=contactKey(car,other);
+    if(!sweep.hit){if(!boxesWithinGap(boxForCar(car),boxForCar(other)))activeContacts.delete(key);return false}
+    const wasActive=activeContacts.has(key);car.x=sweep.safe.x;car.y=sweep.safe.y;car.heading=sweep.safe.heading;
     const face1=sideHit(car,other),face2=sideHit(other,car),motion1=motionHeading(car),motion2=motionHeading(other);
     const type=Rules.classifyCollision({attackerFace:face1,defenderFace:face2,attackerMotion:motion1,defenderMotion:motion2,attackerDirection:car.direction,defenderDirection:other.direction});
     const sameDirection=Rules.angleDifference(motion1,motion2)<=45;
     const original1=car.speed,original2=other.speed,speeds=Rules.collisionSpeeds(type,original1,original2,car.damageModifier,other.damageModifier,sameDirection);
+    const dx=sweep.final.x-previous.x,dy=sweep.final.y-previous.y,toOtherX=other.x-previous.x,toOtherY=other.y-previous.y;
+    const movingToward=!wasActive||dx*toOtherX+dy*toOtherY>0;
+    const block=(wasActive||speeds.collisionSpeed<=0)&&movingToward?fixedPathBlock(other,sweep.final.x-sweep.safe.x,sweep.final.y-sweep.safe.y):null;
+    const action=Rules.contactAction({activeContact:wasActive,collisionSpeed:speeds.collisionSpeed,movingToward,pushedBlocked:Boolean(block)});
+    if(action!=="impact"){
+      activeContacts.add(key);
+      if(action==="halt")haltBlockedPair(car,other,block,sweep);
+      else if(action==="push")pushContactPair(car,other,sweep);
+      return true;
+    }
+    activeContacts.add(key);
     const base=Rules.rollRamDamage(speeds.collisionSpeed,()=>roll(1));
     const damageToOther=Math.floor(base*car.damageModifier),damageToCar=Math.floor(base*other.damageModifier);
     log(`${collisionLabel(type)} collision at ${speeds.collisionSpeed} mph: base ${base}; ${car.name} DM ${car.damageModifier.toFixed(2)}, ${other.name} DM ${other.damageModifier.toFixed(2)}.`,"crash","crash");
@@ -209,9 +261,13 @@
   }
   function fixedObjectCollision(car,object,previous,isWall=false){
     const attempted={x:car.x,y:car.y},key=`${car.id}:${isWall?"wall":object.id}`;car.x=previous.x;car.y=previous.y;car.heading=previous.heading??car.heading;
-    if(activeContacts.has(key))return;activeContacts.add(key);
     const center=isWall?{x:Math.min(Math.max(attempted.x,arena.x),arena.x+arena.w),y:Math.min(Math.max(attempted.y,arena.y),arena.y+arena.h)}:{x:object.x+object.w/2,y:object.y+object.h/2};
     const face=sideHit(car,center),sideswipe=face==="left"||face==="right",collisionSpeed=sideswipe?Rules.roundUp5(car.speed/4):car.speed,original=car.speed;
+    if(activeContacts.has(key)){
+      if(!sideswipe&&car.speed>0){car.speed=0;endCrashAtHalt(car);log(`${car.name} remains blocked by ${isWall?"the arena wall":object.id} and stops.`,"warn","movement")}
+      return;
+    }
+    activeContacts.add(key);
     const base=Rules.rollRamDamage(collisionSpeed,()=>roll(1)),caused=Math.floor(base*car.damageModifier),available=isWall?Infinity:object.dp,actual=Math.min(caused,available);
     if(!isWall){object.dp=Math.max(0,object.dp-caused);object.destroyed=object.dp<=0}
     damage(car,actual,face,isWall?"Arena wall":"Fixed barrier",{collision:true});
@@ -371,9 +427,9 @@
     return{x:car.x+Math.cos(rad(travel))*inches*SCALE+Math.cos(rad(car.heading+90))*lateral*SCALE,y:car.y+Math.sin(rad(travel))*inches*SCALE+Math.sin(rad(car.heading+90))*lateral*SCALE,heading:car.heading};
   }
   function releaseSeparatedContacts(car){
-    const other=car===player?ai:player;if(dist(car,other)>44)activeContacts.delete(contactKey(car,other));
-    barriers.forEach(b=>{const dx=Math.max(b.x-car.x,0,car.x-(b.x+b.w)),dy=Math.max(b.y-car.y,0,car.y-(b.y+b.h));if(b.destroyed||Math.hypot(dx,dy)>24)activeContacts.delete(`${car.id}:${b.id}`)});
-    if(!collisionWall(car))activeContacts.delete(`${car.id}:wall`);
+    const other=car===player?ai:player;if(!boxesWithinGap(boxForCar(car),boxForCar(other)))activeContacts.delete(contactKey(car,other));
+    barriers.forEach(b=>{if(b.destroyed||!boxesWithinGap(boxForCar(car),boxForRect(b)))activeContacts.delete(`${car.id}:${b.id}`)});
+    if(!nearArenaWall(car))activeContacts.delete(`${car.id}:wall`);
   }
   function applyAutomaticDeceleration(car){
     if(!car.pendingAutoDecel)return;const amount=Math.min(car.speed,car.pendingAutoDecel);car.speed-=amount;car.pendingAutoDecel=0;log(`${car.name}'s controlled skid decelerates it ${amount} mph.`,"warn","movement");if(car.speed===0)car.forcedMove=null;
@@ -403,6 +459,7 @@
     const ok=controlCheck(car,difficultyFor(car,mv),"maneuver",{speedOverride:car.speed,crashExtra:Math.ceil(car.speed/20)});car.crashMomentumHeading=null;if(!ok){car.forcedMove=null;crashMove(car,inches);return}forcedMove(car,inches);
   }
   function performMove(car,mv){
+    if(movementConsumed.delete(car.id)){releaseSeparatedContacts(car);return}
     const inches=moveDist(car);if(inches<=0)return;releaseSeparatedContacts(car);
     if(car.speed===0){endCrashAtHalt(car);return}if(crashMove(car,inches))return;if(forcedMove(car,inches))return;
     const type=mv?.type||"straight";
@@ -622,6 +679,7 @@
   }
   function advance(){
     if(locked||!started)return;
+    movementConsumed.clear();
     const stunnedAtStart=new Map([[player,player.stunnedPhases>0],[ai,ai.stunnedPhases>0]]);
     applyAutomaticDeceleration(player);applyAutomaticDeceleration(ai);
     applyPendingSpeed();
@@ -746,7 +804,7 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));if(roadSurface==="offroad"){[player,ai].forEach(c=>{c.hc=Math.max(0,c.hc-3);c.handling=c.hc})}[player,ai].forEach(c=>c.turnStartSpeed=c.speed);started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.6.0",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log(`Arena duel begins on ${roadSurface} with Chapter 2 driving rules.`,"warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));if(roadSurface==="offroad"){[player,ai].forEach(c=>{c.hc=Math.max(0,c.hc-3);c.handling=c.hc})}[player,ai].forEach(c=>c.turnStartSpeed=c.speed);started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.6.1",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log(`Arena duel begins on ${roadSurface} with Chapter 2 driving rules.`,"warn");snapshot("Initial state");fitArena();updateUI();draw()}
   function chooseBend(side){
     const angle=Number($("bendAngle").value||15);
     const d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle);
