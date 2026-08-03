@@ -164,3 +164,14 @@ main{max-width:1800px}
 @media(max-width:1150px){.garageGrid{grid-template-columns:minmax(540px,1fr) 390px}.vehicleArt{transform:translateX(-50%) scale(.94)}.vehicleArt:hover{transform:translateX(-50%) scale(.955)}}
 @media(max-width:1000px){.garageGrid,.setupGrid{grid-template-columns:1fr}.sticky{position:static}.garageGrid aside{order:-1}.summaryVisual{max-width:520px;margin:0 auto;border:1px solid #414b58}.summaryPanel{padding:14px!important}.summaryBody{padding:16px 0 0}.workshopScene{height:300px}.vehicleArt{height:290px;transform:translateX(-50%)}.vehicleArt:hover{transform:translateX(-50%) scale(1.012)}}
 @media(max-width:700px){.summaryPanel{padding:0!important}.summaryVisual{border:0;max-width:none}.summaryBody{padding:14px}.workshopScene{height:248px}.vehicleArt{height:245px;top:0}.visualLegend{gap:8px;flex-wrap:wrap}.bayRails{left:48px;right:48px}.armorReadoutBadge{transform-origin:center}.summaryTitle{flex-direction:column}.summaryTitle .badge{margin-bottom:8px}}
+
+/* v0.6.0 Chapter 2 maneuver controls */
+.maneuverDeck{border:1px solid #3d4754;border-radius:9px;background:#12171d;overflow:hidden}
+.maneuverDeck summary{cursor:pointer;padding:10px 12px;color:#ffd276;font-size:12px;font-weight:850;letter-spacing:.04em;user-select:none}
+.maneuverDeck[open] summary{border-bottom:1px solid #303945;background:#1c222a}
+.maneuverSection{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:9px 10px;border-bottom:1px solid #2b333e}
+.maneuverSection:last-child{border-bottom:0}.maneuverHeading{grid-column:1/-1;color:#8491a1;font:800 9px ui-monospace,Consolas,monospace;letter-spacing:.11em;text-transform:uppercase}
+.maneuverSection .controlLabel{min-width:0}.maneuverSection select{width:100%;font-size:11px}.maneuverSection button{min-width:0;font-size:11px;padding:8px 6px}
+.maneuverSection button.selected,.controls button.selected{background:#725719;border-color:#f2b84b;box-shadow:0 0 0 2px #f2b84b33;color:#fff4d0}
+.collisionBadge{background:#5b252b!important;color:#ffabb2!important}.forcedBadge{background:#55451b!important;color:#ffe08a!important}
+@media(max-width:420px){.maneuverSection{grid-template-columns:1fr}.maneuverHeading{grid-column:1}.maneuverSection .controlLabel{grid-column:1}}

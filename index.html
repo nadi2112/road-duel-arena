@@ -1,7 +1,7 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.5.1</title><link rel="stylesheet" href="styles.css?v=0.5.1-stable"></head><body>
-<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.5.1 Directional Garage</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.6.0</title><link rel="stylesheet" href="styles.css?v=0.6.0"></head><body>
+<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.6.0 Chapter 2 Driving</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
 <main>
-<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.5.1 sharpens the live graphical workshop with true front/rear tire rendering, six-zone armor readouts, and a clearer top-down vehicle silhouette.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
+<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.6.0 brings the full Chapter 2 maneuver set and weight-, speed-, angle-, and armor-aware collision resolution to the arena while preserving the approved v0.5.1 garage.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
 
 <section id="garage" class="screen">
 <div class="sectionHead"><div><div class="eyebrow">VEHICLE DESIGN</div><h2>Garage</h2></div><div><button id="newVehicle">New Design</button> <button id="saveVehicle" class="primary">Save Vehicle</button></div></div>
@@ -36,7 +36,7 @@
 <section id="arenaSetup" class="screen"><div class="sectionHead"><div><div class="eyebrow">MATCH CONTROL</div><h2>Arena Setup</h2></div></div><div class="setupGrid">
 <div class="panel"><h3>Your Vehicle</h3><select id="playerVehicle"></select><div id="playerPreview" class="vehiclePreview"></div></div>
 <div class="panel"><h3>AI Vehicle</h3><select id="aiVehicle"></select><div id="aiPreview" class="vehiclePreview"></div></div>
-<div class="panel"><h3>Duel</h3><label>Starting speed<select id="startSpeed"><option>10</option><option selected>20</option><option>30</option><option>40</option></select></label><button id="launchArena" class="primary wide">Launch Arena</button><p class="hint">Combat, crashes, wall impacts, and barriers remain the v0.1 prototype.</p></div>
+<div class="panel"><h3>Duel</h3><label>Starting speed<select id="startSpeed"><option>10</option><option selected>20</option><option>30</option><option>40</option></select></label><label>Arena surface<select id="roadSurface"><option value="dry">Dry pavement</option><option value="lightRain">Light rain (+D1)</option><option value="heavyRain">Heavy rain (+D2)</option><option value="gravel">Gravel (+D1)</option><option value="oil">Oil-coated (+D2)</option><option value="lightSnow">Light snow (+D2)</option><option value="heavySnow">Heavy snow (+D3)</option><option value="ice">Ice / packed snow (+D4)</option><option value="offroad">Off-road (+D1 maneuvers)</option></select></label><button id="launchArena" class="primary wide">Launch Arena</button><p class="hint">Chapter 2 maneuvers, crash resolution, fixed-object impacts, and four vehicle-collision classes are automated.</p></div>
 </div></section>
 <section id="arena" class="screen arenaScreen">
 
@@ -44,12 +44,12 @@
 
   <section class="arenaViewport"><div class="cameraToolbar"><button id="zoomOut">−</button><button id="zoomIn">+</button><button id="fitArena">Fit Arena</button><button id="centerPlayer">Center Car</button><button id="followPlayer">Follow: Off</button><span id="zoomLabel">100%</span></div><section id="gameWrap">
     <canvas id="game" width="900" height="900"></canvas>
-    <div id="toast"></div><div class="overlay" id="hotkeyOverlay" style="display:none"><div class="card hotkeyCard"><h2>Keyboard Quick Reference</h2><div class="hotkeyGrid"><kbd>↑ / W</kbd><span>Increase selected speed change</span><kbd>↓ / X</kbd><span>Decrease selected speed change</span><kbd>C</kbd><span>Select hold speed</span><kbd>← / Q</kbd><span>Bend left</span><kbd>→ / E</kbd><span>Bend right</span><kbd>A</kbd><span>Drift left</span><kbd>D</kbd><span>Drift right</span><kbd>S</kbd><span>Straight</span><kbd>V</kbd><span>Forward / reverse gear</span><kbd>F</kbd><span>Fire</span><kbd>Space / Enter</kbd><span>Commit phase</span><kbd>H / ?</kbd><span>Help</span><kbd>Esc</kbd><span>Close / straight</span></div><button id="closeHotkeys" class="primary">Return to Duel</button></div></div>
+    <div id="toast"></div><div class="overlay" id="hotkeyOverlay" style="display:none"><div class="card hotkeyCard"><h2>Keyboard Quick Reference</h2><div class="hotkeyGrid"><kbd>↑ / W</kbd><span>Increase selected speed change</span><kbd>↓ / X</kbd><span>Decrease selected speed change</span><kbd>C</kbd><span>Select hold speed</span><kbd>← / Q</kbd><span>Step bend left</span><kbd>→ / E</kbd><span>Step bend right</span><kbd>A</kbd><span>Drift left</span><kbd>D</kbd><span>Drift right</span><kbd>S</kbd><span>Straight</span><kbd>V</kbd><span>Forward / reverse gear</span><kbd>F</kbd><span>Fire</span><kbd>Space / Enter</kbd><span>Commit phase</span><kbd>H / ?</kbd><span>Help</span><kbd>Esc</kbd><span>Close / straight</span></div><p class="tiny">Steep drifts, swerves, controlled skids, T-stops, bootlegger reverses, and pivots are available in Advanced Maneuvers.</p><button id="closeHotkeys" class="primary">Return to Duel</button></div></div>
     <div class="overlay" id="startOverlay">
       <div class="card">
         <h2>Amateur Arena Duel</h2>
-        <p>Enter from opposite gates, maneuver through five phases per turn, and destroy the rival vehicle. This first playable build automates movement timing, handling, control checks, directional armor, basic machine-gun fire, and arena-wall collisions.</p>
-        <p class="tiny">Prototype scope: simplified bends, drifts, targeting, internal damage, and AI. It is not yet the complete classic ruleset.</p>
+        <p>Enter from opposite gates, maneuver through five phases per turn, and destroy the rival vehicle. This build automates Chapter 2 movement, every car maneuver, crash tables, directional collision damage, momentum transfer, fixed objects, debris, and driver concussion.</p>
+        <p class="tiny">The arena remains computer-first: calculations and tables are automatic, while the maneuver and risk decisions stay with you.</p>
         <button class="primary" id="startBtn">Start Duel</button>
       </div>
     </div>
@@ -92,6 +92,29 @@
         <button id="bendRight">Bend Right</button>
         <button id="driftL">Drift Left</button>
         <button id="driftR">Drift Right</button>
+        <details class="wide maneuverDeck" open>
+          <summary>Advanced Maneuvers</summary>
+          <div class="maneuverSection">
+            <span class="maneuverHeading">Lateral</span>
+            <button id="steepDriftL">Steep Drift L</button><button id="steepDriftR">Steep Drift R</button>
+            <button id="swerveL">Swerve Left</button><button id="swerveR">Swerve Right</button>
+          </div>
+          <div class="maneuverSection">
+            <span class="maneuverHeading">Controlled skid after selected bend or swerve</span>
+            <label class="controlLabel">Skid distance<select id="skidDistance"><option value="0.25">1/4 in — +D1</option><option value="0.5">1/2 in — +D2</option><option value="0.75">3/4 in — +D3</option><option value="1">1 in — +D4</option></select></label>
+            <button id="controlledSkid">Add Skid</button>
+          </div>
+          <div class="maneuverSection">
+            <span class="maneuverHeading">Emergency</span>
+            <button id="tstopL">T-Stop Left</button><button id="tstopR">T-Stop Right</button>
+            <button id="bootleggerL">J-Turn Left</button><button id="bootleggerR">J-Turn Right</button>
+          </div>
+          <div class="maneuverSection">
+            <span class="maneuverHeading">5 mph pivot</span>
+            <label class="controlLabel">Pivot angle<select id="pivotAngle"><option>45</option><option>90</option><option>135</option><option selected>180</option></select></label>
+            <button id="pivotL">Pivot Left</button><button id="pivotR">Pivot Right</button>
+          </div>
+        </details>
         <button id="straight" class="wide">Go Straight</button>
         <button id="commit" class="wide primary">Commit Action / Advance Phase</button>
       </div>
@@ -141,4 +164,4 @@
     </section>
   </aside>
 </section></main>
-<script src="src/data.js?v=0.5.1"></script><script src="src/garage.js?v=0.5.1"></script><script src="src/app.js?v=0.5.1"></script><script src="src/arena.js?v=0.5.1"></script></body></html>
+<script src="src/data.js?v=0.6.0"></script><script src="src/garage.js?v=0.6.0"></script><script src="src/app.js?v=0.6.0"></script><script src="src/chapter2.js?v=0.6.0"></script><script src="src/arena.js?v=0.6.0"></script></body></html>

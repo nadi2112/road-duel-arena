@@ -3,8 +3,11 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
+  const Rules = window.RDA_CHAPTER2;
+  if (!Rules) throw new Error("Chapter 2 rules module did not load.");
   const SCALE = 36; // pixels per tabletop inch; one tabletop inch equals one car length
   const arena = {x:45,y:45,w:810,h:810};
+  const roadSurface=localStorage.getItem("rdaRoadSurface")||"dry";
   // Exact movement schedule from the classic Movement Chart for 0-100 mph.
   // Values are total inches moved in each of the five phases.
   // At odd speeds above 50 mph, the half-move is ADDITIONAL to the phase's
@@ -57,11 +60,12 @@
   function controlRow(speed){if(speed<=0)return{v:Array(14).fill("safe"),m:-3};return CONTROL_ROWS.find(r=>speed>=r.min&&speed<=r.max)||CONTROL_ROWS.at(-1)}
   function controlTable(speed,hs){const r=controlRow(speed),h=Math.max(-6,Math.min(7,hs));return{result:r.v[CONTROL_STATUSES.indexOf(h)],modifier:r.m}}
   const makeCar = (name,x,y,heading,color,isAI=false) => ({
-    name,x,y,heading,color,isAI,speed:20,hc:2,handling:2,accel:5,topSpeed:90,
+    id:isAI?"ai":"player",name,x,y,heading,color,isAI,speed:20,hc:2,handling:2,accel:5,topSpeed:90,weight:3500,damageModifier:2/3,
     armor:{front:20,right:15,left:15,back:15,top:5,under:5},
     ammo:20, weaponDP:3, alive:true, maneuver:null, maneuverD:0, changedSpeed:false,
     lastFiredTurn:0, firedThisTurn:false, internal:10, pendingCrash:null, crashState:null, firePenalty:0, burning:false,
-    tireDP:{fl:9,fr:9,rl:9,rr:9}, direction:1, stoppedTurns:0, crashTrail:[], crashBannerUntil:0, crashMomentumHeading:null
+    tireDP:{fl:9,fr:9,rl:9,rr:9}, direction:1, stoppedTurns:0, crashTrail:[], crashBannerUntil:0, crashMomentumHeading:null,
+    forcedMove:null,pendingAutoDecel:0,turnStartSpeed:20,stunnedPhases:0,lastCollision:null,armorTypeKey:"plastic",phaseDamage:0
   });
   let player = makeCar("Blue Comet",110,H/2,0,"#4da3ff");
   let ai = makeCar("Red Jackal",W-110,H/2,180,"#ef6262",true);
@@ -73,8 +77,15 @@
     car.handling = car.hc;
     car.accel = design.acceleration || 5;
     car.topSpeed = Math.min(100, design.topSpeed || 100);
+    car.weight = design.weight || car.weight;
+    car.damageModifier = Rules.damageModifier(car.weight);
+    car.armorTypeKey = design.armorTypeKey || "plastic";
+    car.suspensionKey=design.suspensionKey||"improved";car.frontTireKey=design.frontTireKey||"puncture";car.rearTireKey=design.rearTireKey||"puncture";
     car.reverseTopSpeed = Math.max(5, Math.floor(car.topSpeed / 5 / 5) * 5);
     car.armor = Object.assign(car.armor, design.armor || {});
+    const tireSpecs=window.RDA_DATA?.tires||{};
+    const frontDP=tireSpecs[design.frontTireKey]?.dp||9,rearDP=tireSpecs[design.rearTireKey]?.dp||9;
+    car.tireDP={fl:frontDP,fr:frontDP,rl:rearDP,rr:rearDP};
     const front = (design.weapons || []).find(w => w.mount === "front");
     if (front && window.RDA_DATA && RDA_DATA.weapons[front.weapon]) {
       const spec = RDA_DATA.weapons[front.weapon];
@@ -84,7 +95,7 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.5.1",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.6.0",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -113,8 +124,21 @@
     let diff=Math.abs(norm(aim-shooter.heading)); if(diff>180)diff=360-diff;
     return diff<=45;
   }
-  const barriers=[{x:W/2-120,y:H/2-150,w:240,h:18},{x:W/2-120,y:H/2+132,w:240,h:18},{x:W/2-15,y:H/2-65,w:30,h:130}];
-  function hitBarrier(car){return barriers.some(r=>car.x+18>r.x&&car.x-18<r.x+r.w&&car.y+11>r.y&&car.y-11<r.y+r.h)}
+  const barriers=[
+    {id:"north-rail",x:W/2-120,y:H/2-150,w:240,h:18,dp:18,maxDP:18,dm:3,destroyed:false},
+    {id:"south-rail",x:W/2-120,y:H/2+132,w:240,h:18,dp:18,maxDP:18,dm:3,destroyed:false},
+    {id:"center-block",x:W/2-15,y:H/2-65,w:30,h:130,dp:24,maxDP:24,dm:4,destroyed:false}
+  ];
+  const debris=[];
+  const activeContacts=new Set();
+  const impactMarks=[];
+  function boxForCar(car){return{x:car.x,y:car.y,halfL:18,halfW:10,heading:car.heading}}
+  function boxForRect(r){return{x:r.x+r.w/2,y:r.y+r.h/2,halfL:r.w/2,halfW:r.h/2,heading:0}}
+  function boxAxes(box){const h=rad(box.heading);return[{x:Math.cos(h),y:Math.sin(h)},{x:-Math.sin(h),y:Math.cos(h)}]}
+  function boxCorners(box){const [forward,side]=boxAxes(box);return[[-1,-1],[-1,1],[1,1],[1,-1]].map(([a,b])=>({x:box.x+forward.x*box.halfL*a+side.x*box.halfW*b,y:box.y+forward.y*box.halfL*a+side.y*box.halfW*b}))}
+  function projected(corners,axis){const values=corners.map(p=>p.x*axis.x+p.y*axis.y);return{min:Math.min(...values),max:Math.max(...values)}}
+  function boxesOverlap(a,b){const ac=boxCorners(a),bc=boxCorners(b),axes=[...boxAxes(a),...boxAxes(b)];return axes.every(axis=>{const ap=projected(ac,axis),bp=projected(bc,axis);return ap.max>=bp.min&&bp.max>=ap.min})}
+  function hitBarrier(car){return barriers.find(r=>!r.destroyed&&boxesOverlap(boxForCar(car),boxForRect(r)))}
   function collisionWall(car){
     const margin=18;
     return car.x<arena.x+margin||car.x>arena.x+arena.w-margin||car.y<arena.y+margin||car.y>arena.y+arena.h-margin;
@@ -124,45 +148,116 @@
     car.y=Math.min(Math.max(car.y,arena.y+19),arena.y+arena.h-19);
   }
   function movementHeading(car){return norm(car.heading+(car.direction<0?180:0))}
+  function motionHeading(car){return car.crashState?.heading??car.forcedMove?.momentumHeading??movementHeading(car)}
+  function collisionLabel(type){return{headOn:"Head-on",rearEnd:"Rear-end",tBone:"T-bone",sideswipe:"Sideswipe"}[type]||type}
+  function contactKey(a,b){return[a.id,b.id].sort().join(":")}
+  function signedDelta(target,current){let d=norm(target-current);if(d>180)d-=360;return d}
+  function interpolateHeading(from,to,t){return norm(from+signedDelta(to,from)*t)}
+  function sweepVehicleContact(car,other,previous){
+    const final={x:car.x,y:car.y,heading:car.heading};
+    const distance=Math.hypot(final.x-previous.x,final.y-previous.y),steps=Math.max(1,Math.ceil(distance/3));
+    let safe={x:previous.x,y:previous.y,heading:previous.heading??car.heading};
+    for(let i=1;i<=steps;i++){
+      const t=i/steps;car.x=previous.x+(final.x-previous.x)*t;car.y=previous.y+(final.y-previous.y)*t;car.heading=interpolateHeading(previous.heading??final.heading,final.heading,t);
+      if(boxesOverlap(boxForCar(car),boxForCar(other)))return{hit:true,safe,contact:{x:car.x,y:car.y,heading:car.heading},final};
+      safe={x:car.x,y:car.y,heading:car.heading};
+    }
+    car.x=final.x;car.y=final.y;car.heading=final.heading;return{hit:false,final};
+  }
+  function addImpactMark(x,y,label){impactMarks.push({x,y,label,until:performance.now()+1800});while(impactMarks.length>8)impactMarks.shift()}
+  function applyConcussion(car,speedChange){
+    const threshold=Rules.concussionThreshold(speedChange);if(threshold<=0)return 0;
+    const result=roll(2);if(result>=threshold){log(`${car.name} concussion check ${result} vs ${threshold}: unaffected.`,"good","control");return 0}
+    const missed=threshold-result,untilTurnEnd=Math.max(1,6-phase);car.stunnedPhases=Math.max(car.stunnedPhases,missed,untilTurnEnd);
+    log(`${car.name}'s driver is stunned for ${car.stunnedPhases} phase${car.stunnedPhases===1?"":"s"} (${result} vs ${threshold}).`,"bad","control");return 2;
+  }
+  function collisionHazardCheck(car,type,originalSpeed,finalSpeed,swipeSpeed,awayDirection,concussionChange=Math.abs(originalSpeed-finalSpeed)){
+    if(!car.alive)return;let d=Rules.collisionHazard(type,originalSpeed,finalSpeed,swipeSpeed)+Rules.surfaceModifier(roadSurface);d+=applyConcussion(car,concussionChange);
+    controlCheck(car,d,"hazard",{speedOverride:originalSpeed,fishtailDir:awayDirection});
+  }
+  function conformVehicle(vehicle,pusherHeading){
+    vehicle.heading=norm(vehicle.heading+Math.max(-30,Math.min(30,signedDelta(pusherHeading,vehicle.heading))));
+    vehicle.x+=Math.cos(rad(pusherHeading))*2;vehicle.y+=Math.sin(rad(pusherHeading))*2;
+  }
+  function resolveVehicleCollision(car,other,previous){
+    const sweep=sweepVehicleContact(car,other,previous);if(!sweep.hit){activeContacts.delete(contactKey(car,other));return false}
+    const key=contactKey(car,other);car.x=sweep.safe.x;car.y=sweep.safe.y;car.heading=sweep.safe.heading;
+    if(activeContacts.has(key))return true;activeContacts.add(key);
+    const face1=sideHit(car,other),face2=sideHit(other,car),motion1=motionHeading(car),motion2=motionHeading(other);
+    const type=Rules.classifyCollision({attackerFace:face1,defenderFace:face2,attackerMotion:motion1,defenderMotion:motion2,attackerDirection:car.direction,defenderDirection:other.direction});
+    const sameDirection=Rules.angleDifference(motion1,motion2)<=45;
+    const original1=car.speed,original2=other.speed,speeds=Rules.collisionSpeeds(type,original1,original2,car.damageModifier,other.damageModifier,sameDirection);
+    const base=Rules.rollRamDamage(speeds.collisionSpeed,()=>roll(1));
+    const damageToOther=Math.floor(base*car.damageModifier),damageToCar=Math.floor(base*other.damageModifier);
+    log(`${collisionLabel(type)} collision at ${speeds.collisionSpeed} mph: base ${base}; ${car.name} DM ${car.damageModifier.toFixed(2)}, ${other.name} DM ${other.damageModifier.toFixed(2)}.`,"crash","crash");
+    damage(other,damageToOther,face2,`${collisionLabel(type)} ram`,{collision:true});
+    damage(car,damageToCar,face1,`${collisionLabel(type)} ram`,{collision:true});
+    car.speed=speeds.speed1;other.speed=speeds.speed2;
+    if(type!=="sideswipe"){
+      if(car.speed===0&&other.speed>0)conformVehicle(car,motion2);
+      if(other.speed===0&&car.speed>0)conformVehicle(other,motion1);
+    }
+    const away1=Math.sin(rad(norm(Math.atan2(other.y-car.y,other.x-car.x)*180/Math.PI-motion1)))>=0?-1:1;
+    const away2=-away1;
+    const concussionChange=type==="tBone"?Math.abs(original1-car.speed):null;
+    collisionHazardCheck(car,type,original1,car.speed,speeds.swipeSpeed||0,away1,concussionChange??Math.abs(original1-car.speed));
+    collisionHazardCheck(other,type,original2,other.speed,speeds.swipeSpeed||0,away2,concussionChange??Math.abs(original2-other.speed));
+    car.lastCollision={type,speed:speeds.collisionSpeed,face:face1,damage:damageToCar};other.lastCollision={type,speed:speeds.collisionSpeed,face:face2,damage:damageToOther};
+    addImpactMark((car.x+other.x)/2,(car.y+other.y)/2,collisionLabel(type).toUpperCase());
+    log(`Post-impact speeds: ${car.name} ${car.speed} mph; ${other.name} ${other.speed} mph.`,"warn","movement");
+    return true;
+  }
+  function fixedObjectCollision(car,object,previous,isWall=false){
+    const attempted={x:car.x,y:car.y},key=`${car.id}:${isWall?"wall":object.id}`;car.x=previous.x;car.y=previous.y;car.heading=previous.heading??car.heading;
+    if(activeContacts.has(key))return;activeContacts.add(key);
+    const center=isWall?{x:Math.min(Math.max(attempted.x,arena.x),arena.x+arena.w),y:Math.min(Math.max(attempted.y,arena.y),arena.y+arena.h)}:{x:object.x+object.w/2,y:object.y+object.h/2};
+    const face=sideHit(car,center),sideswipe=face==="left"||face==="right",collisionSpeed=sideswipe?Rules.roundUp5(car.speed/4):car.speed,original=car.speed;
+    const base=Rules.rollRamDamage(collisionSpeed,()=>roll(1)),caused=Math.floor(base*car.damageModifier),available=isWall?Infinity:object.dp,actual=Math.min(caused,available);
+    if(!isWall){object.dp=Math.max(0,object.dp-caused);object.destroyed=object.dp<=0}
+    damage(car,actual,face,isWall?"Arena wall":"Fixed barrier",{collision:true});
+    if(!sideswipe){car.speed=(!isWall&&object.destroyed)?Rules.temporarySpeed(original,car.damageModifier,object.dm):0}
+    const type=sideswipe?"sideswipe":"headOn";collisionHazardCheck(car,type,original,car.speed,sideswipe?collisionSpeed:0,random()<.5?-1:1);
+    log(`${car.name} ${sideswipe?"sideswipes":"rams"} ${isWall?"the arena wall":object.id} at ${collisionSpeed} mph for ${actual} damage${!isWall&&object.destroyed?" and breaches it":""}.`,"crash","crash");
+    addImpactMark(car.x,car.y,isWall?"WALL":object.destroyed?"BREACH":"BARRIER");if(car.speed===0)endCrashAtHalt(car);
+  }
+  function resolveDebris(car){
+    debris.forEach(piece=>{if(piece.hitBy?.has(car.id)||dist(car,piece)>20)return;piece.hitBy??=new Set();piece.hitBy.add(car.id);let total=0;Object.keys(car.tireDP).forEach(k=>{const amount=Rules.debrisTireDamage(roll(1));damageTire(car,k,amount,"Road debris");total+=amount});const hazard=1+Rules.surfaceModifier(roadSurface);log(`${car.name} hits debris: ${total} total tire damage and a D${hazard} hazard.`,total?"bad":"warn","damage");controlCheck(car,hazard,"hazard")})
+  }
   function resolveSolidCollisions(car,previous,uncontrolled=false){
-    if(hitBarrier(car)){
-      car.x=previous.x; car.y=previous.y;
-      log(`${car.name} strikes a barrier${uncontrolled?" while out of control":""}.`,"bad");
-      damage(car,roll(1),"front","Barrier");
-      if(!uncontrolled)controlCheck(car,3,"hazard");
-      else car.speed=Math.max(0,car.speed-10);
-    }
-    if(collisionWall(car)){
-      clampInsideArena(car);
-      const ram=Math.max(1,Math.floor(car.speed/10));
-      damage(car,roll(Math.min(6,ram)),"front","Wall collision");
-      car.speed=Math.max(0,car.speed-20);
-      car.handling=-6;
-      log(`${car.name} is stopped by the arena wall${uncontrolled?" during forced movement":""}.`,"bad");
-      if(car.speed===0)endCrashAtHalt(car);
-    }
+    const barrier=hitBarrier(car);if(barrier)fixedObjectCollision(car,barrier,previous,false);
+    if(collisionWall(car)){fixedObjectCollision(car,null,previous,true);clampInsideArena(car)}
+    const other=car===player?ai:player;if(car.alive&&other.alive)resolveVehicleCollision(car,other,previous);
+    resolveDebris(car);
   }
-  function damage(target, amount, side, source){
-    const absorbed=Math.min(target.armor[side],amount); target.armor[side]-=absorbed; amount-=absorbed;
+  function damage(target, amount, side, source,options={}){
+    const incoming=Math.max(0,Math.floor(amount));let armorCost=incoming;
+    if(options.collision&&target.armorTypeKey==="metal")armorCost=Math.ceil(incoming/3);
+    const absorbedArmor=Math.min(target.armor[side]||0,armorCost);target.armor[side]=Math.max(0,(target.armor[side]||0)-absorbedArmor);
+    const absorbed=options.collision&&target.armorTypeKey==="metal"?Math.min(incoming,absorbedArmor*3):Math.min(incoming,absorbedArmor);amount=incoming-absorbed;
     log(`${source}: ${target.name} ${side} armor absorbs ${absorbed}.`,"warn");
-    if(amount>0){target.internal-=amount;log(`${amount} internal damage penetrates!`,"bad");}
+    target.phaseDamage+=incoming;if(amount>0){target.internal-=amount;log(`${amount} internal damage penetrates!`,"bad");}
+    if(incoming>=10){debris.push({x:target.x+(random()-.5)*24,y:target.y+(random()-.5)*18,hitBy:new Set([target.id])});log(`${target.name} sheds road debris from the impact.`,"warn","damage")}
     if(target.internal<=0){target.alive=false;log(`${target.name} is destroyed!`,"bad");}
+    return{incoming,absorbed,penetrated:Math.max(0,amount)};
   }
-  function controlCheck(car,d,source="maneuver"){
-    if(d<=0)return true;car.handling=Math.max(-6,car.handling-d);const c=controlTable(car.speed,car.handling);
+  function controlCheck(car,d,source="maneuver",options={}){
+    if(d<=0)return true;car.handling=Math.max(-6,car.handling-d);const checkSpeed=options.speedOverride??car.speed,c=controlTable(checkSpeed,car.handling);
     if(c.result==="safe"){log(`${car.name}: D${d}; HS ${car.handling}; safe.`);return true}
-    if(c.result==="XX"){log(`${car.name}: automatic loss of control.`,"bad");scheduleCrash(car,d,source,c.modifier);return false}
-    const rr=roll(1);log(`${car.name}: control ${rr}, needs ${c.result}+.` ,rr>=c.result?"good":"bad");if(rr<c.result){scheduleCrash(car,d,source,c.modifier);return false}return true;
+    if(c.result==="XX"){log(`${car.name}: automatic loss of control.`,"bad");scheduleCrash(car,d,source,c.modifier,options);return false}
+    const rr=roll(1);log(`${car.name}: control ${rr}, needs ${c.result}+.` ,rr>=c.result?"good":"bad");if(rr<c.result){scheduleCrash(car,d,source,c.modifier,options);return false}return true;
   }
-  function scheduleCrash(car,d,source,sm){
-    const raw=roll(2),total=raw+sm+(d-3);
-    log(`${car.name}: crash ${raw} ${sm>=0?"+":""}${sm} speed ${(d-3)>=0?"+":""}${d-3} difficulty = ${total}.`,"bad");
-    car.pendingCrash={table:source==="hazard"?2:1,result:total,heading:car.crashMomentumHeading ?? movementHeading(car),difficulty:d};
+  function scheduleCrash(car,d,source,sm,options={}){
+    const extra=(options.crashExtra||0)+(roadSurface==="offroad"?-3:0),raw=roll(2),total=raw+sm+(d-3)+extra;
+    log(`${car.name}: crash ${raw} ${sm>=0?"+":""}${sm} speed ${(d-3)>=0?"+":""}${d-3} difficulty${extra?` ${extra>=0?"+":""}${extra} special`:""} = ${total}.`,"bad");
+    car.pendingCrash={table:source==="hazard"?2:1,result:total,heading:car.crashMomentumHeading ?? motionHeading(car),difficulty:d,fishtailDir:options.fishtailDir};
     car.crashBannerUntil=performance.now()+1200;
     log(`⚠ LOSS OF CONTROL — ${car.name}` ,"crash");
     applyCrash(car); // Crash result is established in the phase control is lost.
   }
-  function tires(car,n){Object.keys(car.tireDP).forEach(k=>car.tireDP[k]=Math.max(0,car.tireDP[k]-(typeof n==="function"?n():n)))}
+  function damageTire(car,key,amount,source="Tire damage"){
+    const before=car.tireDP[key],after=Math.max(0,before-amount);car.tireDP[key]=after;if(before>0&&after===0){car.handling=-6;car.hc=Math.max(0,car.hc-2);log(`${source}: ${car.name}'s ${key.toUpperCase()} tire is lost; HC -2 and handling drops to -6.`,"bad","damage");if(!car.resolvingCrash)controlCheck(car,6,"hazard")}
+  }
+  function tires(car,n){Object.keys(car.tireDP).forEach(k=>damageTire(car,k,typeof n==="function"?n():n))}
   function resolveTable1(car,r,h){
     if(r<=2){car.crashState={type:"skid",distance:.25,heading:h};car.firePenalty=Math.max(car.firePenalty,3);log("Crash Table 1: trivial skid 1/4\".","warn")}
     else if(r<=4){car.crashState={type:"skid",distance:.5,heading:h};car.speed=Math.max(0,car.speed-5);car.firePenalty=Math.max(car.firePenalty,6);log("Crash Table 1: minor skid 1/2\", speed -5.","warn")}
@@ -181,18 +276,18 @@
     else{tires(car,()=>roll(3));car.crashState={type:"vault",heading:h,remaining:roll(1),stage:0};car.handling=-6;car.firePenalty=99;log("Crash Table 1: vault.","bad")}
     if(car.speed===0)endCrashAtHalt(car);
   }
-  function resolveTable2(car,r,p){const dir=random()<.5?-1:1;if(r<=4){car.heading=norm(car.heading+dir*15);car.firePenalty=Math.max(car.firePenalty,3);log("Crash Table 2: minor fishtail.","warn")}else if(r<=8){car.heading=norm(car.heading+dir*30);car.firePenalty=Math.max(car.firePenalty,6);log("Crash Table 2: major fishtail.","bad")}else{car.heading=norm(car.heading+dir*(r<=10?15:r<=14?30:45));log("Crash Table 2: fishtail then Crash Table 1.","bad");const row=controlRow(car.speed),raw=roll(2);resolveTable1(car,raw+row.m+(p.difficulty-3),p.heading)}}
-  function applyCrash(car){if(!car.pendingCrash)return;const p=car.pendingCrash;car.pendingCrash=null;p.table===2?resolveTable2(car,p.result,p):resolveTable1(car,p.result,p.heading)}
+  function resolveTable2(car,r,p){const dir=p.fishtailDir||(random()<.5?-1:1);if(r<=4){car.heading=norm(car.heading+dir*15);car.firePenalty=Math.max(car.firePenalty,3);log("Crash Table 2: minor fishtail.","warn")}else if(r<=8){car.heading=norm(car.heading+dir*30);car.firePenalty=Math.max(car.firePenalty,6);log("Crash Table 2: major fishtail.","bad")}else{car.heading=norm(car.heading+dir*(r<=10?15:r<=14?30:45));log("Crash Table 2: fishtail then Crash Table 1.","bad");const row=controlRow(car.speed),raw=roll(2);resolveTable1(car,raw+row.m+(p.difficulty-3),p.heading)}}
+  function applyCrash(car){if(!car.pendingCrash)return;const p=car.pendingCrash;car.pendingCrash=null;car.resolvingCrash=true;p.table===2?resolveTable2(car,p.result,p):resolveTable1(car,p.result,p.heading);car.resolvingCrash=false}
   function angleDifference(a,b){let d=Math.abs(norm(a-b));return d>180?360-d:d}
   function endCrashAtHalt(car){
-    if(!car.crashState)return;
+    if(!car.crashState){if(car.speed===0){car.forcedMove=null;car.pendingAutoDecel=0}return}
     if(car.crashState.type==="spin")log(`${car.name}'s spinout ends at 0 mph.`,"good");
     car.crashState=null; car.pendingCrash=null; car.direction=1;
   }
   function crashMove(car,inches){
     applyCrash(car);
     const c=car.crashState;if(!c)return false;
-    const previous={x:car.x,y:car.y};
+    const previous={x:car.x,y:car.y,heading:car.heading};
     if(c.type==="skid"){
       const d=Math.min(inches,c.distance);car.x+=Math.cos(rad(c.heading))*d*SCALE;car.y+=Math.sin(rad(c.heading))*d*SCALE;
       const rest=Math.max(0,inches-d);car.x+=Math.cos(rad(movementHeading(car)))*rest*SCALE;car.y+=Math.sin(rad(movementHeading(car)))*rest*SCALE;
@@ -245,74 +340,80 @@
     y+=Math.sin(rad(travel))*remaining*SCALE;
     return {x,y,heading:newHeading};
   }
+  function maneuverRuleType(type){
+    if(type==="bendL"||type==="bendR")return"bend";
+    if(type==="driftL"||type==="driftR")return"drift";
+    if(type==="steepDriftL"||type==="steepDriftR")return"steepDrift";
+    if(type==="swerveL"||type==="swerveR")return"swerve";
+    if(type==="bootleggerL"||type==="bootleggerR")return"bootlegger";
+    if(type==="tstopL"||type==="tstopR")return"tstop";
+    if(type==="pivotL"||type==="pivotR")return"pivot";
+    return"straight";
+  }
+  function difficultyFor(car,mv){const type=maneuverRuleType(mv?.type),defaultAngle=(type==="bend"||type==="swerve")?15:0;return Rules.maneuverDifficulty(type,{angle:mv?.angle||defaultAngle,skidDistance:mv?.skidDistance,reverse:car.direction<0,surface:roadSurface,speed:car.speed})}
+  function swerveEndpoint(car,side,angle,inches){
+    const lateralSide=side==="left"?1:-1,offset=.25*SCALE*lateralSide;
+    const shifted={...car,x:car.x+Math.cos(rad(car.heading+90))*offset,y:car.y+Math.sin(rad(car.heading+90))*offset};
+    return bendEndpoint(shifted,side,angle,inches);
+  }
+  function pivotEndpoint(car,side,angle){
+    const travel=movementHeading(car),advanced={...car,x:car.x+Math.cos(rad(travel))*.25*SCALE,y:car.y+Math.sin(rad(travel))*.25*SCALE};
+    const sign=(side==="left"?-1:1)*(car.direction<0?-1:1),newHeading=norm(car.heading+sign*angle),rearX=car.direction<0?18:-18,rearY=side==="left"?-10:10;
+    const rotate=(x,y,h)=>({x:x*Math.cos(rad(h))-y*Math.sin(rad(h)),y:x*Math.sin(rad(h))+y*Math.cos(rad(h))}),before=rotate(rearX,rearY,advanced.heading),after=rotate(rearX,rearY,newHeading);
+    return{x:advanced.x+before.x-after.x,y:advanced.y+before.y-after.y,heading:newHeading};
+  }
+  function maneuverEndpoint(car,mv,inches){
+    const type=mv?.type||"straight",angle=mv?.angle||15,travel=movementHeading(car);
+    if(type==="bendL"||type==="bendR")return bendEndpoint(car,type==="bendL"?"left":"right",angle,inches);
+    if(type==="swerveL"||type==="swerveR")return swerveEndpoint(car,type==="swerveL"?"left":"right",angle,inches);
+    if(type==="pivotL"||type==="pivotR")return pivotEndpoint(car,type==="pivotL"?"left":"right",angle);
+    let lateral=0;if(type==="driftL")lateral=-.25;if(type==="driftR")lateral=.25;if(type==="steepDriftL")lateral=-.5;if(type==="steepDriftR")lateral=.5;
+    return{x:car.x+Math.cos(rad(travel))*inches*SCALE+Math.cos(rad(car.heading+90))*lateral*SCALE,y:car.y+Math.sin(rad(travel))*inches*SCALE+Math.sin(rad(car.heading+90))*lateral*SCALE,heading:car.heading};
+  }
+  function releaseSeparatedContacts(car){
+    const other=car===player?ai:player;if(dist(car,other)>44)activeContacts.delete(contactKey(car,other));
+    barriers.forEach(b=>{const dx=Math.max(b.x-car.x,0,car.x-(b.x+b.w)),dy=Math.max(b.y-car.y,0,car.y-(b.y+b.h));if(b.destroyed||Math.hypot(dx,dy)>24)activeContacts.delete(`${car.id}:${b.id}`)});
+    if(!collisionWall(car))activeContacts.delete(`${car.id}:wall`);
+  }
+  function applyAutomaticDeceleration(car){
+    if(!car.pendingAutoDecel)return;const amount=Math.min(car.speed,car.pendingAutoDecel);car.speed-=amount;car.pendingAutoDecel=0;log(`${car.name}'s controlled skid decelerates it ${amount} mph.`,"warn","movement");if(car.speed===0)car.forcedMove=null;
+  }
+  function forcedMove(car,inches){
+    const forced=car.forcedMove;if(!forced)return false;const previous={x:car.x,y:car.y,heading:car.heading};
+    if(forced.type==="controlledSkid"){
+      const skid=Math.min(inches,forced.distance);car.x+=Math.cos(rad(forced.momentumHeading))*skid*SCALE;car.y+=Math.sin(rad(forced.momentumHeading))*skid*SCALE;
+      const rest=Math.max(0,inches-skid);car.x+=Math.cos(rad(movementHeading(car)))*rest*SCALE;car.y+=Math.sin(rad(movementHeading(car)))*rest*SCALE;
+      forced.distance-=skid;if(forced.distance<=0){if(forced.tireDamage)tires(car,forced.tireDamage);log(`${car.name} completes a controlled skid${forced.tireDamage?`; each tire takes ${forced.tireDamage}`:""}.`,"warn","movement");car.forcedMove=null}
+    }else if(forced.type==="bootlegger"){
+      const distance=Math.min(1,inches);car.x+=Math.cos(rad(forced.momentumHeading))*distance*SCALE;car.y+=Math.sin(rad(forced.momentumHeading))*distance*SCALE;car.heading=norm(forced.originalHeading+180);car.speed=0;car.direction=1;car.forcedMove=null;log(`${car.name} completes the bootlegger reverse and stops facing back down its original path.`,"good","movement");
+    }else if(forced.type==="tstop"){
+      const distance=Math.min(inches,Math.max(.25,car.speed/20));car.x+=Math.cos(rad(forced.momentumHeading))*distance*SCALE;car.y+=Math.sin(rad(forced.momentumHeading))*distance*SCALE;car.heading=forced.bodyHeading;const before=car.speed;car.speed=Math.max(0,car.speed-20*distance);const fullLoss=Math.floor((before-car.speed)/20);if(fullLoss>0)tires(car,fullLoss);if(car.speed===0){car.forcedMove=null;log(`${car.name} completes the T-stop.`,"good","movement")}
+    }
+    car.crashTrail.push({x1:previous.x,y1:previous.y,x2:car.x,y2:car.y});resolveSolidCollisions(car,previous,false);return true;
+  }
+  function beginBootlegger(car,mv,inches){
+    if(car.turnStartSpeed<20||car.turnStartSpeed>35||car.changedSpeed){log(`${car.name} cannot begin a bootlegger reverse: it must start the turn at 20–35 mph without a setup speed change.`,"bad","movement");performMove(car,{type:"straight",d:0});return}
+    const dir=mv.type==="bootleggerL"?-1:1,originalHeading=car.heading,momentumHeading=movementHeading(car),previous={x:car.x,y:car.y,heading:car.heading};car.crashMomentumHeading=momentumHeading;
+    const ok=controlCheck(car,difficultyFor(car,mv),"maneuver");tires(car,1);const distance=Math.min(1,inches);car.x+=Math.cos(rad(momentumHeading))*distance*SCALE;car.y+=Math.sin(rad(momentumHeading))*distance*SCALE;car.heading=norm(originalHeading+dir*90);car.firePenalty=99;
+    if(ok)car.forcedMove={type:"bootlegger",momentumHeading,originalHeading};resolveSolidCollisions(car,previous,false);car.crashMomentumHeading=null;
+  }
+  function beginTStop(car,mv,inches){
+    if(car.turnStartSpeed<20||car.turnStartSpeed>35||car.changedSpeed){log(`${car.name} cannot begin a T-stop: it must start the turn at 20–35 mph without a setup speed change.`,"bad","movement");performMove(car,{type:"straight",d:0});return}
+    const dir=mv.type==="tstopL"?-1:1,momentumHeading=movementHeading(car),bodyHeading=norm(car.heading+dir*90);car.forcedMove={type:"tstop",momentumHeading,bodyHeading};car.firePenalty=99;car.crashMomentumHeading=momentumHeading;
+    const ok=controlCheck(car,difficultyFor(car,mv),"maneuver",{speedOverride:car.speed,crashExtra:Math.ceil(car.speed/20)});car.crashMomentumHeading=null;if(!ok){car.forcedMove=null;crashMove(car,inches);return}forcedMove(car,inches);
+  }
   function performMove(car,mv){
-    const inches=moveDist(car);
-    if(inches<=0)return;
-    if(car.speed===0){endCrashAtHalt(car);return}
-    if(crashMove(car,inches))return;
-    // A standalone half-move must be straight and cannot contain a maneuver.
-    if(inches<1 && mv?.d){mv={type:"straight",d:0,angle:0};}
-    const isBend=mv?.type==="bendL"||mv?.type==="bendR";
-    let d=(mv?.d||0)+(car.direction<0&&mv?.d?1:0);
-    const originalTravel=movementHeading(car);
-    const bendAngle=mv?.angle||15;
-    // Keep the one-inch maneuver endpoint separate from any extra straight
-    // movement in a 2+ inch phase. A loss-of-control skid starts only after
-    // the normal maneuver has been completed.
-    const bendUnit=isBend?bendEndpoint(car,mv.type==="bendL"?"left":"right",bendAngle,1):null;
-    if(bendUnit)car.heading=bendUnit.heading;
-    car.crashMomentumHeading=originalTravel;
-    if(!controlCheck(car,d,"maneuver")){
-      const previous={x:car.x,y:car.y};
-      let maneuverUsed=Math.min(1,inches);
-      if(bendUnit){
-        // Complete the exact same corner-aligned bend as a successful move.
-        car.x=bendUnit.x;car.y=bendUnit.y;
-      } else {
-        // Drifts also complete their ordinary one-inch maneuver before a skid.
-        let lateral=0;
-        if(mv?.type==="driftL")lateral=-0.25*SCALE;
-        if(mv?.type==="driftR")lateral=0.25*SCALE;
-        const travel=movementHeading(car);
-        car.x+=Math.cos(rad(travel))*maneuverUsed*SCALE+Math.cos(rad(car.heading+90))*lateral;
-        car.y+=Math.sin(rad(travel))*maneuverUsed*SCALE+Math.sin(rad(car.heading+90))*lateral;
-      }
-      resolveSolidCollisions(car,previous,false);
-      const remaining=Math.max(0,inches-maneuverUsed);
-      if(remaining>0)crashMove(car,remaining);
-      car.crashMomentumHeading=null;
-      return;
-    }
-    car.crashMomentumHeading=null;
-    let lateral=0;
-    if(mv?.type==="driftL")lateral=-0.25*SCALE;
-    if(mv?.type==="driftR")lateral=0.25*SCALE;
-    const travel=movementHeading(car),previous={x:car.x,y:car.y};
-    if(isBend){
-      // bendUnit was calculated from the original pre-maneuver heading. Reuse it
-      // rather than recalculating after car.heading has already been rotated.
-      // Recalculation here used to rotate the endpoint translation a second time,
-      // causing the committed car to miss the correctly drawn preview outline.
-      car.x=bendUnit.x;car.y=bendUnit.y;
-      const remaining=Math.max(0,inches-1);
-      if(remaining>0){
-        const postBendTravel=movementHeading(car);
-        car.x+=Math.cos(rad(postBendTravel))*remaining*SCALE;
-        car.y+=Math.sin(rad(postBendTravel))*remaining*SCALE;
-      }
-    }
-    else {
-      car.x += Math.cos(rad(travel))*inches*SCALE + Math.cos(rad(car.heading+90))*lateral;
-      car.y += Math.sin(rad(travel))*inches*SCALE + Math.sin(rad(car.heading+90))*lateral;
-    }
-    resolveSolidCollisions(car,previous,false);
-    if(dist(player,ai)<38 && player.alive && ai.alive){
-      const rel=Math.abs(player.speed-ai.speed) || Math.max(player.speed,ai.speed);
-      const hit=Math.max(1,Math.floor(rel/15));
-      damage(player,roll(Math.min(6,hit)),sideHit(player,ai),"Vehicle collision");
-      damage(ai,roll(Math.min(6,hit)),sideHit(ai,player),"Vehicle collision");
-      player.speed=Math.max(0,player.speed-10);ai.speed=Math.max(0,ai.speed-10);
-    }
+    const inches=moveDist(car);if(inches<=0)return;releaseSeparatedContacts(car);
+    if(car.speed===0){endCrashAtHalt(car);return}if(crashMove(car,inches))return;if(forcedMove(car,inches))return;
+    const type=mv?.type||"straight";
+    if(inches<1&&type!=="pivotL"&&type!=="pivotR"&&type!=="straight")mv={type:"straight",d:0,angle:0};
+    if((type==="pivotL"||type==="pivotR")&&car.speed!==5){log(`${car.name} cannot pivot unless moving exactly 5 mph.`,"bad","movement");mv={type:"straight",d:0}}
+    if(type.startsWith("bootlegger")){beginBootlegger(car,mv,inches);return}
+    if(type.startsWith("tstop")){beginTStop(car,mv,inches);return}
+    const originalTravel=movementHeading(car),previous={x:car.x,y:car.y,heading:car.heading},endpoint=maneuverEndpoint(car,mv,inches),d=difficultyFor(car,mv);car.crashMomentumHeading=originalTravel;car.heading=endpoint.heading;
+    const ok=controlCheck(car,d,"maneuver");car.x=endpoint.x;car.y=endpoint.y;resolveSolidCollisions(car,previous,false);
+    if(ok&&mv?.skidDistance){const skid=Rules.controlledSkid(mv.skidDistance);car.forcedMove={type:"controlledSkid",distance:Number(mv.skidDistance),momentumHeading:originalTravel,tireDamage:skid.tireDamage};car.pendingAutoDecel=skid.deceleration;car.firePenalty=Math.max(car.firePenalty,skid.firePenalty);log(`${car.name} sets up a ${mv.skidDistance}\" controlled skid for its next move.`,"warn","movement")}
+    if(!ok){const remaining=Math.max(0,inches-1);if(remaining>0)crashMove(car,remaining)}car.crashMomentumHeading=null;
   }
   function rangeModifier(range){
     // Classic rules: point blank is less than 1 inch; long range is -1
@@ -347,7 +448,7 @@
   }
   function modifierText(value){return value>0?`+${value}`:`${value}`}
   function fire(shooter,target){
-    if(!shooter.alive||shooter.ammo<=0||shooter.lastFiredTurn===turn||shooter.weaponDP<=0)return false;
+    if(!shooter.alive||shooter.ammo<=0||shooter.lastFiredTurn===turn||shooter.weaponDP<=0||shooter.stunnedPhases>0)return false;
     if(!inArc(shooter,target)){log(`${shooter.name}: target outside front firing arc.`,"bad","combat");return false}
     if(shooter.firePenalty>=99){log(`${shooter.name}: aimed fire prohibited after loss of control.`,"bad","combat");return false}
     const shot=shotCalculation(shooter,target);
@@ -359,7 +460,7 @@
     } else {
       const dmg=roll(1); const side=sideHit(target,shooter);
       log(`Hit! ${dmg} damage to ${target.name}'s ${side}.`,"good","damage"); damage(target,dmg,side,"Machine gun");
-      controlCheck(target,dmg>=10?3:dmg>=6?2:1,"hazard");
+      controlCheck(target,(dmg>=10?3:dmg>=6?2:1)+Rules.surfaceModifier(roadSurface),"hazard");
     }
     updateInspector();
     return true;
@@ -372,8 +473,8 @@
     return {type:"straight",d:0};
   }
   function aiAct(){
-    const mv=aiChoice(); ai.maneuverD=mv.d; performMove(ai,mv);
-    if(ai.alive && player.alive && inArc(ai,player) && random()<.75)fire(ai,player);
+    const mv=ai.stunnedPhases?{type:"straight",d:0}:aiChoice(); ai.maneuverD=difficultyFor(ai,mv); performMove(ai,mv);
+    if(ai.alive && player.alive && !ai.stunnedPhases && inArc(ai,player) && random()<.75)fire(ai,player);
   }
   function clone(v){return JSON.parse(JSON.stringify(v))}
   function snapshot(label="Phase resolved"){const frame={turn,phase,label,rngState,player:clone(player),ai:clone(ai),events:replay.events.length};replay.frames.push(frame);replayIndex=replay.frames.length-1;updateReplayUI()}
@@ -405,15 +506,20 @@
   function importReplayFile(file){const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!Array.isArray(data.frames)||!data.frames.length)throw new Error("No replay frames");replay=data;rngSeed=data.seed||1;rngState=rngSeed;replayReadOnly=true;locked=true;restoreFrame(0,{autoResume:false});log("Imported replay loaded. Use replay controls to inspect it.","warn","movement")}catch(e){toast(`Replay import failed: ${e.message}`)}};reader.readAsText(file)}
   function stopReplay(){if(replayTimer){clearInterval(replayTimer);replayTimer=null}if($("replayPlay"))$("replayPlay").textContent="Play"}
   function toggleReplayPlay(){if(replayTimer){stopReplay();return}if(!replay.frames.length)return;if(!replayMode&&!replayReadOnly)restoreFrame(0,{autoResume:false});$("replayPlay").textContent="Pause";replayTimer=setInterval(()=>{if(replayIndex>=replay.frames.length-1){stopReplay();if(!replayReadOnly)resumeLive();return}restoreFrame(replayIndex+1)},500)}
-  function canChooseManeuver(){return moveDist(player)>=1 && !player.crashState;}
+  function canChooseManeuver(type=selected.type){
+    if(player.crashState||player.forcedMove||player.stunnedPhases>0)return false;
+    if(type==="pivotL"||type==="pivotR")return player.speed===5&&moveDist(player)>=.5;
+    return moveDist(player)>=1;
+  }
   function projectedSpeed(){
-    if(player.changedSpeed)return player.speed;
+    const automatic=Math.min(player.speed,player.pendingAutoDecel||0),base=player.speed-automatic;
+    if(player.changedSpeed)return base;
     const limit=player.direction<0?(player.reverseTopSpeed||Math.max(5,Math.floor(player.topSpeed/5))):player.topSpeed;
-    return Math.max(0,Math.min(limit,player.speed+pendingSpeedDelta));
+    return Math.max(0,Math.min(limit,base+pendingSpeedDelta));
   }
   function speedChangeOptions(){
     const options=[];
-    const maxBrake=Math.min(10,player.speed);
+    const maxBrake=Math.min(45,player.speed);
     for(let delta=-maxBrake;delta<=-5;delta+=5)options.push(delta);
     options.push(0);
     const limit=player.direction<0?(player.reverseTopSpeed||Math.max(5,Math.floor(player.topSpeed/5))):player.topSpeed;
@@ -435,30 +541,46 @@
   }
   function applyPendingSpeed(){
     if(player.changedSpeed||pendingSpeedDelta===0)return;
-    const before=player.speed, after=projectedSpeed();
+    const before=player.speed, after=projectedSpeed(),deceleration=Math.max(0,before-after);
+    if(deceleration>10){
+      const baseD=Rules.brakingDifficulty(deceleration),d=baseD+Rules.surfaceModifier(roadSurface);player.crashMomentumHeading=movementHeading(player);
+      controlCheck(player,d,"maneuver",{speedOverride:before});
+      const tireDamage=Rules.rapidBrakeTireDamage(deceleration,()=>roll(1));if(tireDamage){tires(player,tireDamage);log(`Rapid braking damages every tire by ${tireDamage}.`,"bad","damage")}
+      player.crashMomentumHeading=null;
+    }
     player.speed=after;player.changedSpeed=true;
     if(after===0)endCrashAtHalt(player);
     if(after>before)log(`${player.name} accelerates ${after-before} mph to ${after} mph.`);
     else if(after<before)log(`${player.name} decelerates ${before-after} mph to ${after} mph.`);
     pendingSpeedDelta=0;
   }
-  function setSelected(type,d,label,angle=0){if(replayMode||!canChooseManeuver())return;selected={type,d,label,angle};$("previewText").textContent=`Selected: ${label} (D${d}). Resulting handling: ${Math.max(-6,player.handling-d)}. Speed after commit: ${projectedSpeed()} mph.`;draw()}
+  function setSelected(type,d,label,angle=0,extra={}){
+    if(replayMode||!canChooseManeuver(type))return;
+    if((type.startsWith("bootlegger")||type.startsWith("tstop"))&&(player.turnStartSpeed<20||player.turnStartSpeed>35||pendingSpeedDelta!==0)){toast("This maneuver requires a 20–35 mph turn-start speed and no same-turn setup braking.");return}
+    selected={type,label,angle,...extra};selected.d=difficultyFor(player,selected);
+    document.querySelectorAll(".controls button.selected").forEach(button=>button.classList.remove("selected"));const activeId={bendL:"bendLeft",bendR:"bendRight"}[type]||type;$(activeId)?.classList.add("selected");
+    const surfaceNote=Rules.surfaceModifier(roadSurface)?` including surface +D${Rules.surfaceModifier(roadSurface)}`:"";
+    $("previewText").textContent=`Selected: ${label} (D${selected.d}${surfaceNote}). Resulting handling: ${Math.max(-6,player.handling-selected.d)}. Speed after commit: ${projectedSpeed()} mph.`;draw()
+  }
   function updateUI(){
     $("turnNum").textContent=turn;$("phaseNum").textContent=phase;$("speed").textContent=`${player.direction<0?"R ":""}${player.speed}`;$("handling").textContent=player.handling;
     $("ammo").textContent=player.ammo;$("weaponDP").textContent=player.weaponDP;
     $("armor").innerHTML=Object.entries(player.armor).map(([k,v])=>`<div>${k}<strong>${v}</strong></div>`).join("");
     $("phasebar").innerHTML=[1,2,3,4,5].map(p=>`<div class="phase ${p===phase?'active':''}">${p}</div>`).join("");
     const controlsLocked=replayMode||locked||!player.alive;
-    const speedLocked=controlsLocked||player.changedSpeed;
+    const speedLocked=controlsLocked||player.changedSpeed||player.forcedMove||player.stunnedPhases>0;
     populateSpeedChoices();
     if($("speedChange"))$("speedChange").disabled=speedLocked;
     if($("reverse")){$("reverse").disabled=controlsLocked||player.speed!==0||player.stoppedTurns<1;$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
-    $("fire").disabled=controlsLocked||player.lastFiredTurn===turn||player.ammo<=0;
-    const maneuverLocked=controlsLocked||!canChooseManeuver();
-    ["bendLeft","bendRight","bendAngle","driftL","driftR","straight"].forEach(id=>{if($(id))$(id).disabled=maneuverLocked});
+    $("fire").disabled=controlsLocked||player.lastFiredTurn===turn||player.ammo<=0||player.stunnedPhases>0||player.firePenalty>=99;
+    const maneuverLocked=controlsLocked||player.crashState||player.forcedMove||player.stunnedPhases>0||moveDist(player)<1;
+    ["bendLeft","bendRight","bendAngle","driftL","driftR","steepDriftL","steepDriftR","swerveL","swerveR","skidDistance","controlledSkid","tstopL","tstopR","bootleggerL","bootleggerR","straight"].forEach(id=>{if($(id))$(id).disabled=maneuverLocked});
+    const pivotLocked=controlsLocked||!canChooseManeuver("pivotL");["pivotAngle","pivotL","pivotR"].forEach(id=>{if($(id))$(id).disabled=pivotLocked});
+    $("controlledSkid").disabled=maneuverLocked||!["bendL","bendR","swerveL","swerveR"].includes(selected.type);
+    const emergencyLocked=maneuverLocked||player.turnStartSpeed<20||player.turnStartSpeed>35||pendingSpeedDelta!==0;["tstopL","tstopR","bootleggerL","bootleggerR"].forEach(id=>{if($(id))$(id).disabled=emergencyLocked});
     $("commit").disabled=controlsLocked;
     if(!controlsLocked){
-      const reason=player.crashState?`Maneuvers unavailable during ${player.crashState.type}.`:moveDist(player)<=0?`No vehicle movement is scheduled in Phase ${phase}.`:`Choose a maneuver and speed change, then commit.`;
+      const reason=player.stunnedPhases?`Driver stunned for ${player.stunnedPhases} more phase${player.stunnedPhases===1?"":"s"}; vehicle continues straight.`:player.forcedMove?`${player.forcedMove.type} movement is committed and will resolve automatically.`:player.crashState?`Maneuvers unavailable during ${player.crashState.type}.`:moveDist(player)<=0?`No vehicle movement is scheduled in Phase ${phase}.`:moveDist(player)<1?`Half-move: straight only${player.speed===5?", or choose a pivot":""}.`:`Choose a maneuver and speed change, then commit.`;
       if(!canChooseManeuver())$("previewText").textContent=reason;
     }
     updateInspector();updateReplayUI();
@@ -468,9 +590,9 @@
     const car=$("inspectCar")?.value==="ai"?ai:player;
     const heading=norm(car.heading), travel=movementHeading(car);
     const headingBearing=norm(heading+90), travelBearing=norm(travel+90);
-    const crashType=car.crashState?.type||"normal";
+    const crashType=car.crashState?.type||car.forcedMove?.type||(car.stunnedPhases?"driver stunned":"normal");
     const crash=`${crashType}${car.crashState?.face?` / ${car.crashState.face}`:""}`;
-    const statusClass={normal:"statusNormal",skid:"statusSkid",spin:"statusSpin",roll:"statusRoll",vault:"statusVault"}[crashType]||"statusCrash";
+    const statusClass={normal:"statusNormal",skid:"statusSkid",spin:"statusSpin",roll:"statusRoll",vault:"statusVault",controlledSkid:"forcedBadge",bootlegger:"forcedBadge",tstop:"forcedBadge","driver stunned":"collisionBadge"}[crashType]||"statusCrash";
     const frameText=replay.frames.length?`${Math.max(0,replayIndex)+1} / ${replay.frames.length}`:"0 / 0";
     $("inspector").innerHTML=`
       <div><b>Position</b>${car.x.toFixed(1)}, ${car.y.toFixed(1)}</div><div><b>Speed</b>${car.speed} mph</div>
@@ -478,6 +600,8 @@
       <div><b>Handling</b>${car.handling}</div><div><b>HC</b>${car.hc}</div>
       <div><b>Crash state</b><span class="statusBadge ${statusClass}">${crash}</span></div><div><b>Internal</b>${car.internal}</div>
       <div><b>Direction</b>${car.direction<0?"reverse":"forward"}</div><div><b>Replay</b>${replayMode?"REPLAY":"LIVE"} · ${frameText}</div>
+      <div><b>Weight / DM</b>${car.weight} lb / ${car.damageModifier.toFixed(2)}</div><div><b>Surface</b>${roadSurface}</div>
+      <div><b>Last collision</b>${car.lastCollision?`${collisionLabel(car.lastCollision.type)} · ${car.lastCollision.speed} mph · ${car.lastCollision.face}`:"none"}</div><div><b>Driver</b>${car.stunnedPhases?`stunned ${car.stunnedPhases} phase(s)`:"ready"}</div>
       <div title="The fixed starting value used to reproduce this game's random rolls."><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="The generator's current internal value after random rolls have been consumed."><b>RNG state</b>${rngState}</div>
       ${(()=>{const target=car===player?ai:player,shot=shotCalculation(car,target);return `<div class="shotInspector"><b>Current Machine-Gun Shot</b><span>Base to-hit</span><strong>${shot.base}+</strong>${shot.modifiers.map(m=>`<span>${m.name}<small>${m.detail}</small></span><strong class="${m.value>0?'modPositive':m.value<0?'modNegative':''}">${modifierText(m.value)}</strong>`).join('')}<span>Total modifier</span><strong>${modifierText(shot.total)}</strong><span>Final roll needed</span><strong>${shot.targetNum}+</strong><em>Preview only. Full relative-arc movement modifiers, computers, skill, visibility, specific targets, and sustained fire are not implemented yet.</em></div>`})()}`;
   }
@@ -488,17 +612,29 @@
       $("endText").textContent=player.alive?"The rival vehicle has been destroyed. You are the last survivor.":"Your vehicle has been destroyed in the arena.";
     }
   }
+  function resolveOffroadWear(car){
+    if(roadSurface!=="offroad"||car.speed<=10||car.suspensionKey==="offroad")return;
+    const checks=1+Math.max(0,Math.floor((car.speed-11)/20));
+    for(let i=0;i<checks;i++){
+      const result=roll(2);if(result<=3){damage(car,1,"under","Off-road pounding");}
+      else if(result<=5){const keys=Object.keys(car.tireDP),key=keys[Math.floor(random()*keys.length)],solid=(key[0]==="f"?car.frontTireKey:car.rearTireKey)==="solid";if(!solid){damageTire(car,key,1,"Off-road terrain");log(`${car.name}'s ${key.toUpperCase()} tire takes 1 off-road damage.`,"bad","damage")}}
+    }
+  }
   function advance(){
     if(locked||!started)return;
+    const stunnedAtStart=new Map([[player,player.stunnedPhases>0],[ai,ai.stunnedPhases>0]]);
+    applyAutomaticDeceleration(player);applyAutomaticDeceleration(ai);
     applyPendingSpeed();
-    player.maneuverD=canChooseManeuver()?selected.d:0;
+    player.maneuverD=canChooseManeuver(selected.type)?selected.d:0;
     const pm=moveDist(player), am=moveDist(ai);
     // Faster car moves first; equal speed gives player initiative in prototype.
-    if(ai.speed>player.speed){if(am)aiAct();if(pm)performMove(player,canChooseManeuver()?selected:{type:"straight",d:0,label:"Go straight"})}
-    else {if(pm)performMove(player,canChooseManeuver()?selected:{type:"straight",d:0,label:"Go straight"});if(am)aiAct()}
+    if(ai.speed>player.speed){if(am)aiAct();if(pm)performMove(player,canChooseManeuver(selected.type)?selected:{type:"straight",d:0,label:"Go straight"})}
+    else {if(pm)performMove(player,canChooseManeuver(selected.type)?selected:{type:"straight",d:0,label:"Go straight"});if(am)aiAct()}
     log(`Turn ${turn}, Phase ${phase}: movement resolved.`);
+    [player,ai].forEach(c=>{if(stunnedAtStart.get(c))c.stunnedPhases=Math.max(0,c.stunnedPhases-1);c.phaseDamage=0});
     checkEnd();
     if(phase===5){
+      resolveOffroadWear(player);resolveOffroadWear(ai);
       player.handling=Math.min(player.hc,player.handling+Math.max(1,player.hc));
       ai.handling=Math.min(ai.hc,ai.handling+Math.max(1,ai.hc));
       [player,ai].forEach(c=>{
@@ -509,6 +645,7 @@
         if(c.direction<0 && c.speed>(c.reverseTopSpeed||Math.max(5,Math.floor(c.topSpeed/5))))c.speed=Math.max(c.reverseTopSpeed||5,c.speed-5);
         c.stoppedTurns=c.speed===0?c.stoppedTurns+1:0;
         c.firePenalty=0;
+        c.turnStartSpeed=c.speed;
       });
       turn++;phase=1;player.changedSpeed=ai.changedSpeed=false;pendingSpeedDelta=0;
       player.firedThisTurn=ai.firedThisTurn=false; // legacy display state; lastFiredTurn is authoritative.
@@ -530,9 +667,9 @@
     ctx.strokeStyle="#20262d";ctx.lineWidth=14;
     ctx.beginPath();ctx.moveTo(arena.x, H/2-35);ctx.lineTo(arena.x,H/2+35);ctx.stroke();
     ctx.beginPath();ctx.moveTo(arena.x+arena.w, H/2-35);ctx.lineTo(arena.x+arena.w,H/2+35);ctx.stroke();
-    // low obstacles, original layout
-    ctx.fillStyle="#6a7078";
-    [[W/2-120,H/2-150,240,18],[W/2-120,H/2+132,240,18],[W/2-15,H/2-65,30,130]].forEach(r=>ctx.fillRect(...r));
+    // Destructible fixed barriers from the original arena layout.
+    barriers.filter(b=>!b.destroyed).forEach(b=>{ctx.fillStyle="#6a7078";ctx.fillRect(b.x,b.y,b.w,b.h);ctx.fillStyle="#e1b95f";ctx.font="bold 9px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText(`${b.dp} DP`,b.x+b.w/2,b.y+b.h/2+3)});
+    debris.forEach(piece=>{ctx.save();ctx.translate(piece.x,piece.y);ctx.rotate(rad((piece.x+piece.y)%180));ctx.fillStyle="#9b825b";ctx.strokeStyle="#241d14";ctx.lineWidth=2;ctx.fillRect(-6,-4,12,8);ctx.strokeRect(-6,-4,12,8);ctx.restore()});
     ctx.fillStyle="#b7bdc4";ctx.font="bold 12px sans-serif";ctx.textAlign="center";ctx.fillText("ARENA 01",W/2,70);
   }
   function drawArc(car){
@@ -544,6 +681,9 @@
     if(!car.crashTrail?.length)return;
     ctx.save();ctx.strokeStyle="#ff4d5f";ctx.lineWidth=3;ctx.setLineDash([9,6]);ctx.globalAlpha=.75;
     car.crashTrail.forEach(t=>{ctx.beginPath();ctx.moveTo(t.x1,t.y1);ctx.lineTo(t.x2,t.y2);ctx.stroke()});ctx.restore();
+  }
+  function drawImpacts(){
+    const now=performance.now();for(let i=impactMarks.length-1;i>=0;i--){const mark=impactMarks[i];if(mark.until<=now){impactMarks.splice(i,1);continue}const life=(mark.until-now)/1800;ctx.save();ctx.translate(mark.x,mark.y);ctx.globalAlpha=Math.min(1,life*2);ctx.strokeStyle="#ffcc69";ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,0,18+(1-life)*30,0,Math.PI*2);ctx.stroke();ctx.fillStyle="#fff1c2";ctx.font="bold 10px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText(mark.label,0,-24-(1-life)*10);ctx.restore()}
   }
   function drawCar(car){
     if(!car.alive)return;
@@ -596,30 +736,22 @@
     // Hiding the preview prevents a stale selection from suggesting a future move.
     if(replayMode||!started||!player.alive||player.crashState)return;
     const inches=moveDist(player);if(!inches)return;
-    let h=player.heading,x,y;
-    const previewAngle=selected.angle||15;
-    const isBend=selected.type==="bendL"||selected.type==="bendR";
-    if(isBend && inches>=1){
-      const end=bendEndpoint(player,selected.type==="bendL"?"left":"right",previewAngle,inches);
-      x=end.x;y=end.y;h=end.heading;
-    } else {
-      const travel=movementHeading(player);
-      x=player.x+Math.cos(rad(travel))*inches*SCALE;y=player.y+Math.sin(rad(travel))*inches*SCALE;
-      if(selected.type==="driftL"){x+=Math.cos(rad(h+90))*(-.25*SCALE);y+=Math.sin(rad(h+90))*(-.25*SCALE)}
-      if(selected.type==="driftR"){x+=Math.cos(rad(h+90))*(.25*SCALE);y+=Math.sin(rad(h+90))*(.25*SCALE)}
-    }
+    let end=maneuverEndpoint(player,selected,inches),h=end.heading,x=end.x,y=end.y;
+    if(selected.type?.startsWith("bootlegger")||selected.type?.startsWith("tstop")){const sign=selected.type.endsWith("L")?-1:1,travel=movementHeading(player);x=player.x+Math.cos(rad(travel))*Math.min(1,inches)*SCALE;y=player.y+Math.sin(rad(travel))*Math.min(1,inches)*SCALE;h=norm(player.heading+sign*90)}
     ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle="#f2b84b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(player.x,player.y);ctx.lineTo(x,y);ctx.stroke();
+    if(selected.skidDistance){const sx=x+Math.cos(rad(movementHeading(player)))*selected.skidDistance*SCALE,sy=y+Math.sin(rad(movementHeading(player)))*selected.skidDistance*SCALE;ctx.strokeStyle="#6fd7ff";ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(sx,sy);ctx.stroke()}
     ctx.translate(x,y);ctx.rotate(rad(h));ctx.strokeRect(-18,-10,36,20);ctx.restore();
   }
-  function draw(){ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,W,H);ctx.save();ctx.translate(camera.x,camera.y);ctx.scale(camera.zoom,camera.zoom);drawArena();drawCrashTrail(player);drawCrashTrail(ai);drawArc(player);drawPreview();drawCar(player);drawCar(ai);ctx.restore();if(camera.follow&&!replayMode)centerOn(player,false);if($("zoomLabel"))$("zoomLabel").textContent=`${Math.round(camera.zoom*100)}%`;updateInspector()}
+  function draw(){ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,W,H);ctx.save();ctx.translate(camera.x,camera.y);ctx.scale(camera.zoom,camera.zoom);drawArena();drawCrashTrail(player);drawCrashTrail(ai);drawArc(player);drawPreview();drawCar(player);drawCar(ai);drawImpacts();ctx.restore();if(camera.follow&&!replayMode)centerOn(player,false);if($("zoomLabel"))$("zoomLabel").textContent=`${Math.round(camera.zoom*100)}%`;updateInspector()}
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.4.9",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log("Arena duel begins with garage-selected vehicles.","warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));if(roadSurface==="offroad"){[player,ai].forEach(c=>{c.hc=Math.max(0,c.hc-3);c.handling=c.hc})}[player,ai].forEach(c=>c.turnStartSpeed=c.speed);started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.6.0",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log(`Arena duel begins on ${roadSurface} with Chapter 2 driving rules.`,"warn");snapshot("Initial state");fitArena();updateUI();draw()}
   function chooseBend(side){
     const angle=Number($("bendAngle").value||15);
     const d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle);
   }
+  function chooseSwerve(side){const angle=Number($("bendAngle").value||15);setSelected(side==="left"?"swerveL":"swerveR",Math.ceil(angle/15)+1,`${angle}° ${side} swerve`,angle)}
   function stepBend(direction){
     let signed=selected.type==="bendL"?-(selected.angle||15):selected.type==="bendR"?(selected.angle||15):0;
     signed=Math.max(-90,Math.min(90,signed+direction*15));
@@ -630,9 +762,17 @@
   }
   $("bendLeft").onclick=()=>chooseBend("left");
   $("bendRight").onclick=()=>chooseBend("right");
-  $("bendAngle").onchange=()=>{if(selected.type==="bendL")chooseBend("left");else if(selected.type==="bendR")chooseBend("right");else draw()};
+  $("bendAngle").onchange=()=>{if(selected.type==="bendL")chooseBend("left");else if(selected.type==="bendR")chooseBend("right");else if(selected.type==="swerveL")chooseSwerve("left");else if(selected.type==="swerveR")chooseSwerve("right");else draw()};
   $("driftL").onclick=()=>setSelected("driftL",1,"left drift");
   $("driftR").onclick=()=>setSelected("driftR",1,"right drift");
+  $("steepDriftL").onclick=()=>setSelected("steepDriftL",3,"left steep drift");
+  $("steepDriftR").onclick=()=>setSelected("steepDriftR",3,"right steep drift");
+  $("swerveL").onclick=()=>chooseSwerve("left");$("swerveR").onclick=()=>chooseSwerve("right");
+  $("controlledSkid").onclick=()=>{if(!["bendL","bendR","swerveL","swerveR"].includes(selected.type)){toast("Choose a bend or swerve first.");return}const distance=Number($("skidDistance").value);setSelected(selected.type,0,`${selected.label.replace(/ \+ .* skid$/,'')} + ${distance}\" controlled skid`,selected.angle,{skidDistance:distance})};
+  $("tstopL").onclick=()=>setSelected("tstopL",0,"left T-stop");$("tstopR").onclick=()=>setSelected("tstopR",0,"right T-stop");
+  $("bootleggerL").onclick=()=>setSelected("bootleggerL",7,"left bootlegger reverse");$("bootleggerR").onclick=()=>setSelected("bootleggerR",7,"right bootlegger reverse");
+  $("pivotL").onclick=()=>setSelected("pivotL",0,`${$("pivotAngle").value}° left pivot`,Number($("pivotAngle").value));$("pivotR").onclick=()=>setSelected("pivotR",0,`${$("pivotAngle").value}° right pivot`,Number($("pivotAngle").value));
+  $("pivotAngle").onchange=()=>{if(selected.type==="pivotL")$("pivotL").click();else if(selected.type==="pivotR")$("pivotR").click()};
   $("straight").onclick=()=>setSelected("straight",0,"go straight");
   $("commit").onclick=advance;
   if($("speedChange"))$("speedChange").onchange=e=>setSpeedDelta(Number(e.target.value));

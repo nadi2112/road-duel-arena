@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.6.0 - Chapter 2 Driving and Collisions
+
+- Added the remaining car maneuvers: steep drifts, swerves, controlled skids, bootlegger reverses, T-stops, and pivots.
+- Added rapid-braking difficulty, tire damage, and road-surface modifiers.
+- Replaced generic proximity damage with head-on, rear-end, T-bone, and sideswipe collision procedures.
+- Added collision speed, swipe speed, Damage Modifier, and Temporary Speed Table calculations.
+- Added directional collision armor, metal-armor absorption, momentum transfer, collision hazards, and optional concussion checks.
+- Added fixed-object rams, destructible barriers, wall collisions, debris, impact labels, and continuous-contact suppression.
+- Added an Advanced Maneuvers panel and collision details in the arena inspector and combat log.
+- Added an independent Chapter 2 rules test suite.
+- Preserved the approved v0.5.1 garage layout and visuals.
+- Made production asset paths relative so the release works from a GitHub Pages project subdirectory.
+
 ## v0.5.1 — Directional Garage
 
 - Moved the smaller live vehicle preview above the sticky Design Summary.

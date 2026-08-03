@@ -1,8 +1,8 @@
 Road Duel Arena
 Game Design & Technical Design Document
-Document Version: 1.5
-Game Version: v0.5.1
-Next Milestone: combat targeting and fire mechanics refinement
+Document Version: 1.6
+Game Version: v0.6.0
+Next Milestone: live-play refinement of Chapter 2 driving and collisions
 
 1. Project Overview
 Project Goals
@@ -63,9 +63,12 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current stable baseline is v0.5.1.
+The current release baseline is v0.6.0, built on the approved v0.5.1 garage.
 Major implemented systems include:
 Arena movement
+The complete Chapter 2 car maneuver set
+Head-on, rear-end, T-bone, and sideswipe collision procedures
+Fixed-object, barrier, and wall impacts
 Basic vehicle combat
 Computer-controlled opponent behavior
 Garage and vehicle construction
@@ -77,16 +80,14 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.5.0 milestone is complete.
+The v0.6.0 Chapter 2 driving milestone is complete.
 Completed goals:
-Corrected weapon rate of fire so the machine gun may fire once during the full five-phase turn, rather than once per phase.
-Reset weapon firing availability only when the next turn begins.
-Added a live machine-gun targeting breakdown to the Developer Inspector.
-Made every currently applied to-hit modifier visible, including the total modifier and final roll required.
-Expanded combat-log shot messages to include the targeting calculation.
-Fixed the Combat-only log filter by assigning combat events explicit categories.
-Corrected point-blank and long-range modifier bands.
-Updated replay metadata, page branding, README, changelog, and technical documentation to v0.5.0.
+Added every remaining car maneuver from Chapter 2.
+Implemented the four vehicle-collision classes and their distinct speed procedures.
+Applied vehicle weight, impact direction, armor location, and road conditions to collision results.
+Added fixed-object impacts, debris, collision hazards, and optional concussion checks.
+Preserved continuous-contact state so one impact is not assessed again every phase.
+Added unit tests for the Chapter 2 calculation layer.
 
 2. Design Philosophy
 Computer-First Design
@@ -163,9 +164,11 @@ Acceleration and deceleration
 Braking
 Forward and reverse movement
 Steering and turning
+Drifts, steep drifts, swerves, and controlled skids
+Bootlegger reverses, T-stops, and pivots
 Speed-based movement phases
 Planned movement preview
-The long-term goal is to support every applicable maneuver from the reference rules.
+Every applicable car maneuver from Chapter 2 is available in the arena controls.
 ## Handling
 Handling Class represents the driver's remaining control of the vehicle.
 Maneuvers reduce Handling Class according to difficulty. Stable driving allows Handling Class to recover over time.
@@ -357,16 +360,18 @@ Damage
 Ammunition use
 Combat-log events
 ## Collision Engine
-Vehicle collisions and ramming are planned but not yet complete.
-The future system should support:
+The collision engine supports:
 Collision detection
-Relative speed
-Impact angle
-Vehicle mass
-Damage
-Momentum transfer
-Post-impact movement
-Loss of control
+Head-on, rear-end, T-bone, and sideswipe classification
+Relative and swipe speed
+Impact angle and affected armor face
+Vehicle weight and Damage Modifier
+Temporary Speed Table momentum transfer
+Directional damage and metal-armor collision absorption
+Post-impact speed and conforming movement
+Handling hazards, loss of control, and optional concussion
+Fixed-object, destructible-barrier, and arena-wall impacts
+Continuous-contact suppression
 ## Replay Engine
 The replay engine records enough state or event history to reconstruct gameplay.
 It supports:
@@ -542,10 +547,6 @@ AI use
 Visual and audio feedback
 ## Medium-Term
 Planned systems include:
-Vehicle collisions
-Ramming
-Collision damage
-Momentum transfer
 Improved AI
 Multiple AI vehicles
 Additional arena layouts
