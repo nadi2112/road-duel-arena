@@ -183,6 +183,27 @@
     return "impact";
   }
 
+  function sweepToContact(isBlocked, steps = 1, refinements = 14) {
+    const count = Math.max(1, Math.floor(steps));
+    let safeT = 0;
+    for (let i = 1; i <= count; i += 1) {
+      const contactT = i / count;
+      if (!isBlocked(contactT)) {
+        safeT = contactT;
+        continue;
+      }
+      let low = safeT;
+      let high = contactT;
+      for (let j = 0; j < refinements; j += 1) {
+        const middle = (low + high) / 2;
+        if (isBlocked(middle)) high = middle;
+        else low = middle;
+      }
+      return { hit: true, safeT: low, contactT: high };
+    }
+    return { hit: false, safeT: 1, contactT: 1 };
+  }
+
   function classifyCollision({
     attackerFace,
     defenderFace,
@@ -293,6 +314,7 @@
     collisionSpeeds,
     collisionHazard,
     contactAction,
+    sweepToContact,
     classifyCollision,
     controlledSkid,
     maneuverDifficulty,

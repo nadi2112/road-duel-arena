@@ -1,8 +1,8 @@
-# Road Duel Arena v0.6.1
+# Road Duel Arena v0.6.2
 
 Open `index.html` directly in a modern browser.
 
-## v0.6.1 highlights
+## v0.6.2 highlights
 
 - Preserves the approved v0.5.1 garage presentation and vehicle renderer.
 - Adds steep drifts, swerves, controlled skids, T-stops, bootlegger reverses, and 5 mph pivots.
@@ -14,6 +14,8 @@ Open `index.html` directly in a modern browser.
 - Prevents repeated damage while vehicles remain in continuous contact.
 - Treats equal-speed contact as sustained pushing rather than a new collision.
 - Stops both vehicles when a pushed vehicle is pinned against a barrier or wall.
+- Places vehicles at the last safe point immediately against a wall or barrier instead of canceling the entire phase move.
+- Sweeps both translation and rotation so angled impacts and pivots cannot jump into fixed scenery.
 - Keeps contact state from actual vehicle outlines so separating movement remains available.
 - Adds arena-surface handling modifiers and off-road wear.
 

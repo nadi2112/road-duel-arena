@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.6.2 - Natural Wall Contact
+
+- Fixed wall and barrier impacts canceling the entire scheduled move and leaving a visible gap.
+- Vehicles now advance along the attempted translation and rotation to the last safe position immediately before contact.
+- Arena-wall checks now use the rotated vehicle outline instead of a fixed center margin.
+- Pushed vehicles and their pushers retain their valid movement before becoming pinned against fixed scenery.
+- Added regression coverage for swept last-safe-point collision placement.
+
 ## v0.6.1 - Sustained Contact Fix
 
 - Fixed equal-speed rear contact incorrectly combining Temporary Speed values and raising both vehicles to a phantom 20 mph.

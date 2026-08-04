@@ -95,7 +95,7 @@
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.6.1",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.6.2",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -143,16 +143,17 @@
   function boxesWithinGap(a,b,gap=CONTACT_GAP){const ac=boxCorners(a),bc=boxCorners(b),axes=[...boxAxes(a),...boxAxes(b)];return axes.every(axis=>{const ap=projected(ac,axis),bp=projected(bc,axis);return ap.max+gap>=bp.min&&bp.max+gap>=ap.min})}
   function hitBarrier(car){return barriers.find(r=>!r.destroyed&&boxesOverlap(boxForCar(car),boxForRect(r)))}
   function collisionWall(car){
-    const margin=18;
-    return car.x<arena.x+margin||car.x>arena.x+arena.w-margin||car.y<arena.y+margin||car.y>arena.y+arena.h-margin;
+    return boxCorners(boxForCar(car)).some(point=>point.x<arena.x||point.x>arena.x+arena.w||point.y<arena.y||point.y>arena.y+arena.h);
   }
   function nearArenaWall(car,gap=CONTACT_GAP){
     const corners=boxCorners(boxForCar(car)),xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);
     return Math.min(...xs)<=arena.x+gap||Math.max(...xs)>=arena.x+arena.w-gap||Math.min(...ys)<=arena.y+gap||Math.max(...ys)>=arena.y+arena.h-gap;
   }
   function clampInsideArena(car){
-    car.x=Math.min(Math.max(car.x,arena.x+19),arena.x+arena.w-19);
-    car.y=Math.min(Math.max(car.y,arena.y+19),arena.y+arena.h-19);
+    const corners=boxCorners(boxForCar(car)),xs=corners.map(p=>p.x),ys=corners.map(p=>p.y);
+    const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+    if(minX<arena.x)car.x+=arena.x-minX;if(maxX>arena.x+arena.w)car.x-=maxX-(arena.x+arena.w);
+    if(minY<arena.y)car.y+=arena.y-minY;if(maxY>arena.y+arena.h)car.y-=maxY-(arena.y+arena.h);
   }
   function movementHeading(car){return norm(car.heading+(car.direction<0?180:0))}
   function motionHeading(car){return car.crashState?.heading??car.forcedMove?.momentumHeading??movementHeading(car)}
@@ -160,6 +161,21 @@
   function contactKey(a,b){return[a.id,b.id].sort().join(":")}
   function signedDelta(target,current){let d=norm(target-current);if(d>180)d-=360;return d}
   function interpolateHeading(from,to,t){return norm(from+signedDelta(to,from)*t)}
+  function setPose(car,from,to,t){car.x=from.x+(to.x-from.x)*t;car.y=from.y+(to.y-from.y)*t;car.heading=interpolateHeading(from.heading??to.heading,to.heading,t)}
+  function fixedContactAt(car){const object=hitBarrier(car);if(object)return{object,isWall:false};return collisionWall(car)?{object:null,isWall:true}:null}
+  function sweepFixedContact(car,previous){
+    const final={x:car.x,y:car.y,heading:car.heading},from={x:previous.x,y:previous.y,heading:previous.heading??car.heading};
+    const startCar={...car,...from},finalCar={...car,...final},startBlock=fixedContactAt(startCar),finalBlock=fixedContactAt(finalCar);
+    if(startBlock&&!finalBlock){setPose(car,from,final,1);return{hit:false,final}}
+    const distance=Math.hypot(final.x-from.x,final.y-from.y),turn=Math.abs(signedDelta(final.heading,from.heading));
+    const steps=Math.max(1,Math.ceil(distance/2),Math.ceil(turn/3));
+    const result=Rules.sweepToContact(t=>{setPose(car,from,final,t);return Boolean(fixedContactAt(car))},steps);
+    if(!result.hit){setPose(car,from,final,1);return{hit:false,final}}
+    setPose(car,from,final,result.contactT);const block=fixedContactAt(car);
+    const contact={x:car.x,y:car.y,heading:car.heading};setPose(car,from,final,result.safeT);
+    const safe={x:car.x,y:car.y,heading:car.heading};
+    return{hit:true,object:block?.object??finalBlock?.object??null,isWall:block?.isWall??finalBlock?.isWall??false,safe,contact,final};
+  }
   function sweepVehicleContact(car,other,previous){
     const final={x:car.x,y:car.y,heading:car.heading};
     const previousCar={...car,x:previous.x,y:previous.y,heading:previous.heading??car.heading};
@@ -177,23 +193,18 @@
     car.x=final.x;car.y=final.y;car.heading=final.heading;return{hit:false,final};
   }
   function fixedPathBlock(vehicle,dx,dy){
-    const distance=Math.hypot(dx,dy),steps=Math.max(1,Math.ceil(distance/3));
-    for(let i=1;i<=steps;i++){
-      const t=i/steps,probe={...vehicle,x:vehicle.x+dx*t,y:vehicle.y+dy*t};
-      const object=hitBarrier(probe);if(object)return{object,isWall:false,contact:probe};
-      if(collisionWall(probe))return{object:null,isWall:true,contact:probe};
-    }
-    return null;
+    const previous={x:vehicle.x,y:vehicle.y,heading:vehicle.heading},probe={...vehicle,x:vehicle.x+dx,y:vehicle.y+dy};
+    const sweep=sweepFixedContact(probe,previous);return sweep.hit?sweep:null;
   }
   function fixedContactKey(vehicle,block){return`${vehicle.id}:${block.isWall?"wall":block.object.id}`}
   function haltBlockedPair(car,other,block,sweep){
     const moving1=car.speed>0,moving2=other.speed>0,key=fixedContactKey(other,block);
-    car.x=sweep.safe.x;car.y=sweep.safe.y;car.heading=sweep.safe.heading;
+    const otherPrevious={x:other.x,y:other.y,heading:other.heading},pushX=block.safe.x-other.x,pushY=block.safe.y-other.y;
+    car.x=sweep.safe.x+pushX;car.y=sweep.safe.y+pushY;car.heading=sweep.safe.heading;
     if(!activeContacts.has(key)){
-      const otherPrevious={x:other.x,y:other.y,heading:other.heading};
       other.x=block.contact.x;other.y=block.contact.y;
-      fixedObjectCollision(other,block.object,otherPrevious,block.isWall);
-    }
+      fixedObjectCollision(other,block.object,otherPrevious,block.isWall,block);
+    }else{other.x=block.safe.x;other.y=block.safe.y;other.heading=block.safe.heading}
     car.speed=0;other.speed=0;endCrashAtHalt(car);endCrashAtHalt(other);
     if(moving1||moving2)log(`${car.name} cannot push ${other.name} through ${block.isWall?"the arena wall":block.object.id}; both vehicles stop.`,"warn","movement");
   }
@@ -259,9 +270,11 @@
     log(`Post-impact speeds: ${car.name} ${car.speed} mph; ${other.name} ${other.speed} mph.`,"warn","movement");
     return true;
   }
-  function fixedObjectCollision(car,object,previous,isWall=false){
-    const attempted={x:car.x,y:car.y},key=`${car.id}:${isWall?"wall":object.id}`;car.x=previous.x;car.y=previous.y;car.heading=previous.heading??car.heading;
-    const center=isWall?{x:Math.min(Math.max(attempted.x,arena.x),arena.x+arena.w),y:Math.min(Math.max(attempted.y,arena.y),arena.y+arena.h)}:{x:object.x+object.w/2,y:object.y+object.h/2};
+  function fixedObjectCollision(car,object,previous,isWall=false,sweep=null){
+    const attempted=sweep?.contact||{x:car.x,y:car.y,heading:car.heading},safe=sweep?.safe||{x:previous.x,y:previous.y,heading:previous.heading??car.heading},key=`${car.id}:${isWall?"wall":object.id}`;
+    car.x=safe.x;car.y=safe.y;car.heading=safe.heading;
+    const wallDistances=[{distance:Math.abs(attempted.x-arena.x),point:{x:arena.x,y:attempted.y}},{distance:Math.abs(attempted.x-(arena.x+arena.w)),point:{x:arena.x+arena.w,y:attempted.y}},{distance:Math.abs(attempted.y-arena.y),point:{x:attempted.x,y:arena.y}},{distance:Math.abs(attempted.y-(arena.y+arena.h)),point:{x:attempted.x,y:arena.y+arena.h}}];
+    const center=isWall?wallDistances.sort((a,b)=>a.distance-b.distance)[0].point:{x:object.x+object.w/2,y:object.y+object.h/2};
     const face=sideHit(car,center),sideswipe=face==="left"||face==="right",collisionSpeed=sideswipe?Rules.roundUp5(car.speed/4):car.speed,original=car.speed;
     if(activeContacts.has(key)){
       if(!sideswipe&&car.speed>0){car.speed=0;endCrashAtHalt(car);log(`${car.name} remains blocked by ${isWall?"the arena wall":object.id} and stops.`,"warn","movement")}
@@ -280,8 +293,7 @@
     debris.forEach(piece=>{if(piece.hitBy?.has(car.id)||dist(car,piece)>20)return;piece.hitBy??=new Set();piece.hitBy.add(car.id);let total=0;Object.keys(car.tireDP).forEach(k=>{const amount=Rules.debrisTireDamage(roll(1));damageTire(car,k,amount,"Road debris");total+=amount});const hazard=1+Rules.surfaceModifier(roadSurface);log(`${car.name} hits debris: ${total} total tire damage and a D${hazard} hazard.`,total?"bad":"warn","damage");controlCheck(car,hazard,"hazard")})
   }
   function resolveSolidCollisions(car,previous,uncontrolled=false){
-    const barrier=hitBarrier(car);if(barrier)fixedObjectCollision(car,barrier,previous,false);
-    if(collisionWall(car)){fixedObjectCollision(car,null,previous,true);clampInsideArena(car)}
+    const fixedSweep=sweepFixedContact(car,previous);if(fixedSweep.hit){fixedObjectCollision(car,fixedSweep.object,previous,fixedSweep.isWall,fixedSweep);clampInsideArena(car)}
     const other=car===player?ai:player;if(car.alive&&other.alive)resolveVehicleCollision(car,other,previous);
     resolveDebris(car);
   }
@@ -804,7 +816,7 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));if(roadSurface==="offroad"){[player,ai].forEach(c=>{c.hc=Math.max(0,c.hc-3);c.handling=c.hc})}[player,ai].forEach(c=>c.turnStartSpeed=c.speed);started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.6.1",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log(`Arena duel begins on ${roadSurface} with Chapter 2 driving rules.`,"warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));if(roadSurface==="offroad"){[player,ai].forEach(c=>{c.hc=Math.max(0,c.hc-3);c.handling=c.hc})}[player,ai].forEach(c=>c.turnStartSpeed=c.speed);started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.6.2",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log(`Arena duel begins on ${roadSurface} with Chapter 2 driving rules.`,"warn");snapshot("Initial state");fitArena();updateUI();draw()}
   function chooseBend(side){
     const angle=Number($("bendAngle").value||15);
     const d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle);

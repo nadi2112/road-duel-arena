@@ -64,6 +64,67 @@ test("sustained contact pushes when clear and halts when the lead car is blocked
   assert.equal(rules.contactAction({ activeContact: false, collisionSpeed: 25, movingToward: true, pushedBlocked: false }), "impact");
 });
 
+test("swept fixed-object contact preserves the safe part of a move", () => {
+  const sweep = rules.sweepToContact((t) => t >= 0.625, 18);
+  assert.equal(sweep.hit, true);
+  assert.ok(sweep.safeT < 0.625);
+  assert.ok(sweep.safeT > 0.6249);
+  assert.ok(sweep.contactT >= 0.625);
+  assert.ok(sweep.contactT < 0.6251);
+
+  assert.deepEqual(rules.sweepToContact(() => false, 18), {
+    hit: false,
+    safeT: 1,
+    contactT: 1,
+  });
+});
+
+test("the supplied north-rail replay advances to the barrier instead of rolling back", () => {
+  const previous = { x: 285.7308839189534, y: 316.65850509502377, heading: 330 };
+  const attempted = {
+    x: previous.x + Math.cos((previous.heading * Math.PI) / 180) * 36,
+    y: previous.y + Math.sin((previous.heading * Math.PI) / 180) * 36,
+    heading: previous.heading,
+  };
+  const northRail = { x: 450, y: 309, halfL: 120, halfW: 9, heading: 0 };
+  const axes = (box) => {
+    const angle = (box.heading * Math.PI) / 180;
+    return [
+      { x: Math.cos(angle), y: Math.sin(angle) },
+      { x: -Math.sin(angle), y: Math.cos(angle) },
+    ];
+  };
+  const corners = (box) => {
+    const [forward, side] = axes(box);
+    return [[-1, -1], [-1, 1], [1, 1], [1, -1]].map(([a, b]) => ({
+      x: box.x + forward.x * box.halfL * a + side.x * box.halfW * b,
+      y: box.y + forward.y * box.halfL * a + side.y * box.halfW * b,
+    }));
+  };
+  const overlaps = (a, b) => {
+    const ac = corners(a), bc = corners(b);
+    return [...axes(a), ...axes(b)].every((axis) => {
+      const ap = ac.map((p) => p.x * axis.x + p.y * axis.y);
+      const bp = bc.map((p) => p.x * axis.x + p.y * axis.y);
+      return Math.max(...ap) >= Math.min(...bp) && Math.max(...bp) >= Math.min(...ap);
+    });
+  };
+  const poseAt = (t) => ({
+    x: previous.x + (attempted.x - previous.x) * t,
+    y: previous.y + (attempted.y - previous.y) * t,
+    heading: previous.heading,
+    halfL: 18,
+    halfW: 10,
+  });
+
+  const sweep = rules.sweepToContact((t) => overlaps(poseAt(t), northRail), 18);
+  const safe = poseAt(sweep.safeT);
+  assert.equal(sweep.hit, true);
+  assert.ok(Math.hypot(safe.x - previous.x, safe.y - previous.y) > 20);
+  assert.equal(overlaps(safe, northRail), false);
+  assert.equal(overlaps(poseAt(sweep.contactT), northRail), true);
+});
+
 test("impact orientation classifies all four collision types", () => {
   assert.equal(rules.classifyCollision({attackerFace:"front",defenderFace:"front",attackerMotion:0,defenderMotion:180}), "headOn");
   assert.equal(rules.classifyCollision({attackerFace:"front",defenderFace:"back",attackerMotion:0,defenderMotion:0}), "rearEnd");
