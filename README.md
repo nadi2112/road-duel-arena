@@ -1,8 +1,11 @@
-# Road Duel Arena v0.6.2
+# Road Duel Arena v0.6.3
 
 Open `index.html` directly in a modern browser.
 
-## v0.6.2 highlights
+## v0.6.3 highlights
+
+- Enables Add Skid immediately after selecting an eligible bend or swerve; the speed-dropdown workaround is no longer needed.
+- Preserves the existing controlled-skid mechanics and the v0.6.2 collision/contact behavior.
 
 - Preserves the approved v0.5.1 garage presentation and vehicle renderer.
 - Adds steep drifts, swerves, controlled skids, T-stops, bootlegger reverses, and 5 mph pivots.

@@ -1,7 +1,7 @@
 Road Duel Arena
 Game Design & Technical Design Document
 Document Version: 1.6
-Game Version: v0.6.2
+Game Version: v0.6.3
 Next Milestone: live-play refinement of Chapter 2 driving and collisions
 
 1. Project Overview
@@ -63,7 +63,7 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current release baseline is v0.6.2, built on the approved v0.5.1 garage.
+The current release baseline is v0.6.3, built on the approved v0.5.1 garage.
 Major implemented systems include:
 Arena movement
 The complete Chapter 2 car maneuver set
@@ -80,7 +80,7 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.6.2 Chapter 2 driving milestone is complete, including sustained-contact and natural fixed-object placement fixes.
+The v0.6.3 Chapter 2 driving milestone is complete, including sustained-contact, natural fixed-object placement, and the controlled-skid button refresh fix.
 Completed goals:
 Added every remaining car maneuver from Chapter 2.
 Implemented the four vehicle-collision classes and their distinct speed procedures.

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.3 - Controlled-Skid Button Refresh
+
+- Fixed Add Skid remaining disabled after selecting an eligible bend or swerve.
+- Maneuver selection now refreshes dependent control states immediately; changing the speed selection is no longer required.
+- Preserved the existing controlled-skid rules and execution mechanics.
+- Added regression coverage for the maneuver-selection refresh path.
+
 ## v0.6.2 - Natural Wall Contact
 
 - Fixed wall and barrier impacts canceling the entire scheduled move and leaving a visible gap.

@@ -1,4 +1,4 @@
-# Rule Coverage v0.6.2
+# Rule Coverage v0.6.3
 
 ## Chapter 2 movement and control
 
@@ -10,6 +10,7 @@
 - Drifts and steep drifts
 - Swerves
 - Controlled skids at 1/4, 1/2, 3/4, and 1 inch
+- Immediate controlled-skid control availability after selecting a qualifying bend or swerve
 - Bootlegger reverses
 - T-stops
 - 5 mph pivots

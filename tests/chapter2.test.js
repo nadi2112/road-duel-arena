@@ -1,6 +1,17 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const rules = require("../src/chapter2.js");
+
+test("maneuver selection immediately refreshes controlled-skid eligibility", () => {
+  const arenaSource = fs.readFileSync(path.join(__dirname, "../src/arena.js"), "utf8");
+  const selectionFunction = arenaSource.match(/function setSelected\([\s\S]*?\n  }\n  function updateUI\(/)?.[0];
+
+  assert.ok(selectionFunction, "setSelected should be present before updateUI");
+  assert.match(selectionFunction, /updateUI\(\);draw\(\)/);
+  assert.match(arenaSource, /\["bendL","bendR","swerveL","swerveR"\]\.includes\(selected\.type\)/);
+});
 
 test("collision damage modifiers follow the Chapter 2 weight bands", () => {
   assert.equal(rules.damageModifier(2000), 1 / 3);
