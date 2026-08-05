@@ -4,7 +4,10 @@
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   const Rules = window.RDA_CHAPTER2;
+  const Combat = window.RDA_CHAPTER3;
+  const Data = window.RDA_DATA;
   if (!Rules) throw new Error("Chapter 2 rules module did not load.");
+  if (!Combat || !Data) throw new Error("Chapter 3 combat data did not load.");
   const SCALE = 36; // pixels per tabletop inch; one tabletop inch equals one car length
   const arena = {x:45,y:45,w:810,h:810};
   const roadSurface=localStorage.getItem("rdaRoadSurface")||"dry";
@@ -62,10 +65,11 @@
   const makeCar = (name,x,y,heading,color,isAI=false) => ({
     id:isAI?"ai":"player",name,x,y,heading,color,isAI,speed:20,hc:2,handling:2,accel:5,topSpeed:90,weight:3500,damageModifier:2/3,
     armor:{front:20,right:15,left:15,back:15,top:5,under:5},
-    ammo:20, weaponDP:3, alive:true, maneuver:null, maneuverD:0, changedSpeed:false,
-    lastFiredTurn:0, firedThisTurn:false, internal:10, pendingCrash:null, crashState:null, firePenalty:0, burning:false,
+    ammo:20, weaponDP:3, weapons:[], alive:true, maneuver:null, maneuverD:0, changedSpeed:false,
+    lastFiredTurn:0, firedThisTurn:false, firingActionsUsed:0, firingActionsTurn:0, internal:10, pendingCrash:null, crashState:null, firePenalty:0, burning:false, fireExposures:[],componentFireChance:0,
     tireDP:{fl:9,fr:9,rl:9,rr:9}, direction:1, stoppedTurns:0, crashTrail:[], crashBannerUntil:0, crashMomentumHeading:null,
-    forcedMove:null,pendingAutoDecel:0,turnStartSpeed:20,stunnedPhases:0,lastCollision:null,armorTypeKey:"plastic",phaseDamage:0
+    forcedMove:null,pendingAutoDecel:0,turnStartSpeed:20,stunnedPhases:0,lastCollision:null,armorTypeKey:"plastic",phaseDamage:0,
+    bodyKey:"compact",crew:[],cargo:{name:"Cargo",dp:5,maxDP:5},powerPlant:{key:"large",name:"Large",dp:10,maxDP:10,powerUnits:250,maxPowerUnits:250},paintedUntil:0,oilContact:false,substituteProgress:0
   });
   let player = makeCar("Blue Comet",110,H/2,0,"#4da3ff");
   let ai = makeCar("Red Jackal",W-110,H/2,180,"#ef6262",true);
@@ -78,6 +82,7 @@
     car.accel = design.acceleration || 5;
     car.topSpeed = Math.min(100, design.topSpeed || 100);
     car.weight = design.weight || car.weight;
+    car.bodyKey = design.bodyKey || "compact";
     car.damageModifier = Rules.damageModifier(car.weight);
     car.armorTypeKey = design.armorTypeKey || "plastic";
     car.suspensionKey=design.suspensionKey||"improved";car.frontTireKey=design.frontTireKey||"puncture";car.rearTireKey=design.rearTireKey||"puncture";
@@ -86,16 +91,21 @@
     const tireSpecs=window.RDA_DATA?.tires||{};
     const frontDP=tireSpecs[design.frontTireKey]?.dp||9,rearDP=tireSpecs[design.rearTireKey]?.dp||9;
     car.tireDP={fl:frontDP,fr:frontDP,rl:rearDP,rr:rearDP};
-    const front = (design.weapons || []).find(w => w.mount === "front");
-    if (front && window.RDA_DATA && RDA_DATA.weapons[front.weapon]) {
-      const spec = RDA_DATA.weapons[front.weapon];
-      car.ammo = spec.ammo;
-      car.weaponName = spec.name;
-    }
+    const plant=Data.plants[design.plantKey]||Data.plants.large;
+    car.powerPlant={key:design.plantKey||"large",name:plant.name,dp:plant.dp,maxDP:plant.dp,powerUnits:plant.spaces*50,maxPowerUnits:plant.spaces*50};
+    car.cargo={name:"Cargo",dp:Math.max(1,Math.min(10,Math.round((design.maxSpaces-design.spaces)||5))),maxDP:Math.max(1,Math.min(10,Math.round((design.maxSpaces-design.spaces)||5)))};
+    const crewDesign=design.crew||{drivers:1,gunners:0,passengers:0};
+    car.crew=[{id:"driver",name:"Driver",role:"driver",dp:3,maxDP:3}];
+    for(let i=0;i<(crewDesign.gunners||0);i++)car.crew.push({id:`gunner${i+1}`,name:`Gunner ${i+1}`,role:"gunner",dp:3,maxDP:3});
+    for(let i=0;i<(crewDesign.passengers||0);i++)car.crew.push({id:`passenger${i+1}`,name:`Passenger ${i+1}`,role:"passenger",dp:3,maxDP:3});
+    car.weapons=(design.weapons||[{weapon:"mg",mount:"front"}]).map((installed,index)=>{const spec=Data.weapons[installed.weapon]||Data.weapons.mg;return{id:`w${index}`,key:installed.weapon,mount:installed.mount||"front",link:installed.link||"",grenadeType:installed.grenadeType||"explosive",name:spec.name,dp:spec.dp,maxDP:spec.dp,ammo:spec.ammo,lastFiredTurn:0,lastTargetId:null,sustainedTurns:0,automatic:false}});
+    const first=car.weapons[0];car.ammo=first?.ammo??0;car.weaponDP=first?.dp??0;car.weaponName=first?.name||"No weapon";
+    car.firingActionsUsed=0;car.firingActionsTurn=0;car.fireExposures=[];car.componentFireChance=0;car.burning=false;car.paintedUntil=0;car.oilContact=false;car.substituteProgress=0;
+    car.internal=car.powerPlant.dp+car.crew.reduce((sum,member)=>sum+member.dp,0)+car.cargo.dp;
   }
   let turn=1, phase=1, started=false, selected={type:"straight",d:0,angle:0,label:"Go straight"}, pendingSpeedDelta=0, locked=false;
   let rngSeed=(Date.now()>>>0)||1, rngState=rngSeed;
-  let replay={version:"0.6.3",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
+  let replay={version:"0.7.0",seed:rngSeed,initial:null,frames:[],events:[]}, replayIndex=-1, replayTimer=null, replayMode=false;
   let replayReadOnly=false;
   const camera={x:0,y:0,zoom:1,follow:false,dragging:false,lastX:0,lastY:0};
   function random(){rngState=(1664525*rngState+1013904223)>>>0;return rngState/4294967296}
@@ -119,17 +129,16 @@
     if(angle<225)return "back";
     return "left";
   }
-  function inArc(shooter,target){
-    const aim=norm(Math.atan2(target.y-shooter.y,target.x-shooter.x)*180/Math.PI);
-    let diff=Math.abs(norm(aim-shooter.heading)); if(diff>180)diff=360-diff;
-    return diff<=45;
-  }
   const barriers=[
     {id:"north-rail",x:W/2-120,y:H/2-150,w:240,h:18,dp:18,maxDP:18,dm:3,destroyed:false},
     {id:"south-rail",x:W/2-120,y:H/2+132,w:240,h:18,dp:18,maxDP:18,dm:3,destroyed:false},
     {id:"center-block",x:W/2-15,y:H/2-65,w:30,h:130,dp:24,maxDP:24,dm:4,destroyed:false}
   ];
   const debris=[];
+  const combatHazards=[];
+  const pendingGrenades=[];
+  const pendingFireIntents=[];
+  let hazardId=0;
   const activeContacts=new Set();
   const movementConsumed=new Set();
   const impactMarks=[];
@@ -292,21 +301,75 @@
   function resolveDebris(car){
     debris.forEach(piece=>{if(piece.hitBy?.has(car.id)||dist(car,piece)>20)return;piece.hitBy??=new Set();piece.hitBy.add(car.id);let total=0;Object.keys(car.tireDP).forEach(k=>{const amount=Rules.debrisTireDamage(roll(1));damageTire(car,k,amount,"Road debris");total+=amount});const hazard=1+Rules.surfaceModifier(roadSurface);log(`${car.name} hits debris: ${total} total tire damage and a D${hazard} hazard.`,total?"bad":"warn","damage");controlCheck(car,hazard,"hazard")})
   }
+  function hazardProximity(car,hazard){const angle=rad(-(hazard.heading||0)),dx=car.x-hazard.x,dy=car.y-hazard.y,x=dx*Math.cos(angle)-dy*Math.sin(angle),y=dx*Math.sin(angle)+dy*Math.cos(angle),halfL=hazard.length*SCALE/2,halfW=hazard.width*SCALE/2,direct=Math.abs(x)<=halfL+10&&Math.abs(y)<=halfW+8,adjacent=Math.abs(x)<=halfL+SCALE/2+10&&Math.abs(y)<=halfW+SCALE/2+8;return{direct,adjacent}}
+  function expireCombatHazards(){
+    for(let i=combatHazards.length-1;i>=0;i--){const hazard=combatHazards[i];if(hazard.expiresSerial>phaseSerial())continue;if(hazard.type==="flamingOil"){hazard.type="smoke";hazard.cloud=true;hazard.expiresSerial=phaseSerial()+300;log("A flaming-oil slick burns out and leaves smoke.","warn","combat")}else combatHazards.splice(i,1)}
+  }
+  function triggerMine(car,hazard,spear=false){
+    const under=Combat.rollDamage(spear?"2d+3":"2d",()=>roll(1));damage(car,under.total,"under",spear?"Spear 1000 mine":"Mine",{weaponSpec:spear?Data.weapons.smd:Data.weapons.md,damageRolls:under.rolls});Object.keys(car.tireDP).forEach(key=>{const tire=Combat.rollDamage(spear?"1d-3":"1d",()=>roll(1));damageTire(car,key,tire.total,spear?"Spear 1000 mine":"Mine")});hazard.active=false;log(`${car.name} detonates ${spear?"a Spear 1000 mine":"a mine"}: ${under.total} underbody damage.`,"bad","damage");weaponDamageHazard(car,under.total)
+  }
+  function resolveCombatHazards(car){
+    expireCombatHazards();car.oilContact=false;
+    combatHazards.forEach(hazard=>{if(hazard.active===false||hazard.armedSerial>phaseSerial())return;const proximity=hazardProximity(car,hazard);if(!proximity.adjacent)return;
+      if(hazard.type==="oil"||hazard.type==="flamingOil")car.oilContact=proximity.direct;
+      if(hazard.checkedBy.includes(car.id))return;hazard.checkedBy.push(car.id);if(hazard.type==="paint"&&proximity.direct){car.paintedUntil=Math.max(car.paintedUntil,turn+3);log(`${car.name}'s windshield is coated with paint through turn ${car.paintedUntil}.`,"bad","combat")}const trigger=roll(1),needed=proximity.direct?4:2;
+      if(hazard.type==="mine"&&trigger<=needed)triggerMine(car,hazard,false);
+      else if(hazard.type==="spearMine"&&trigger<=needed)triggerMine(car,hazard,true);
+      else if(hazard.type==="spikes"&&trigger<=needed){Object.keys(car.tireDP).forEach(key=>{let amount=roll(1);const tireType=key[0]==="f"?car.frontTireKey:car.rearTireKey;if(tireType==="solid")amount=Math.ceil(amount/2);damageTire(car,key,amount,"Road spikes")});log(`${car.name} crosses a spike field.`,"bad","damage")}
+      else if(hazard.type==="flamingOil"&&proximity.direct){const under=Combat.rollDamage("1d-2",()=>roll(1));const result=damage(car,under.total,"under","Flaming oil",{weaponSpec:Data.weapons.foj,damageRolls:under.rolls});Object.keys(car.tireDP).forEach(key=>damageTire(car,key,Combat.rollDamage("1d-2",()=>roll(1)).total,"Flaming oil"));addFireExposure(car,Data.weapons.foj,result);controlCheck(car,3+Rules.surfaceModifier(roadSurface),"hazard")}
+    });
+    for(let i=combatHazards.length-1;i>=0;i--)if(combatHazards[i].active===false)combatHazards.splice(i,1)
+  }
   function resolveSolidCollisions(car,previous,uncontrolled=false){
     const fixedSweep=sweepFixedContact(car,previous);if(fixedSweep.hit){fixedObjectCollision(car,fixedSweep.object,previous,fixedSweep.isWall,fixedSweep);clampInsideArena(car)}
     const other=car===player?ai:player;if(car.alive&&other.alive)resolveVehicleCollision(car,other,previous);
-    resolveDebris(car);
+    resolveDebris(car);resolveCombatHazards(car);
+  }
+  function recomputeInternal(target){target.internal=Math.max(0,(target.powerPlant?.dp||0)+(target.cargo?.dp||0)+(target.crew||[]).reduce((sum,member)=>sum+Math.max(0,member.dp),0))}
+  function componentHit(target,component,amount,source){
+    if(!component||amount<=0)return amount;
+    const before=component.dp||0,taken=Math.min(before,amount);component.dp=Math.max(0,before-taken);const overflow=Math.max(0,amount-taken);
+    log(`${source}: ${component.name} takes ${taken} DP${overflow?`; ${overflow} passes inward`:""}.`,taken?"bad":"warn","damage");
+    if(component.role){
+      if(component.role==="driver"&&before===3&&component.dp<3){log(`${target.name}'s driver is wounded: D2 hazard and -2 skill.`,"bad","control");controlCheck(target,2+Rules.surfaceModifier(roadSurface),"hazard")}
+      if(component.dp===1&&before>1)log(`${component.name} is unconscious.`,"bad","damage");
+      if(component.dp===0&&before>0)log(`${component.name} is killed.`,"bad","damage");
+    }
+    if(component===target.powerPlant&&component.dp===0&&before>0){target.accel=0;target.powerPlant.powerUnits=0;log(`${target.name}'s power plant is destroyed; acceleration and laser fire are lost.`,"bad","damage")}
+    if(component.id?.startsWith("w")&&component.dp===0&&before>0){component.automatic=false;log(`${target.name}'s ${component.name} is destroyed.`,"bad","damage")}
+    const volatileComponent=component===target.powerPlant||["ft","foj"].includes(component.key);if(taken&&volatileComponent&&!/ram|wall|barrier|rollover|vault|vehicle fire/i.test(source)){const incendiary=/laser|flamethrower|flaming oil/i.test(source);target.componentFireChance=Math.max(target.componentFireChance||0,incendiary?4:2)}
+    return overflow;
+  }
+  function hitWeaponLayer(target,mount,amount,source){const candidates=target.weapons.filter(weapon=>weapon.mount===mount&&weapon.dp>0);if(!candidates.length)return amount;return componentHit(target,candidates[Math.floor(random()*candidates.length)],amount,source)}
+  function hitCrewLayer(target,amount,source){const candidates=target.crew.filter(member=>member.dp>0);if(!candidates.length)return amount;return componentHit(target,candidates[Math.floor(random()*candidates.length)],amount,source)}
+  function hitRandomInternal(target,amount,source){const choices=[target.powerPlant,target.cargo,...target.crew].filter(component=>component&&component.dp>0);if(!choices.length)return amount;return componentHit(target,choices[Math.floor(random()*choices.length)],amount,source)}
+  function routeWeaponDamage(target,amount,side,source){
+    if(amount<=0)return 0;let remaining=amount;
+    if(side==="front"){remaining=hitWeaponLayer(target,"front",remaining,source);remaining=componentHit(target,target.powerPlant,remaining,source);remaining=hitCrewLayer(target,remaining,source);remaining=componentHit(target,target.cargo,remaining,source);remaining=hitWeaponLayer(target,"back",remaining,source)}
+    else if(side==="back"){remaining=hitWeaponLayer(target,"back",remaining,source);remaining=componentHit(target,target.cargo,remaining,source);remaining=hitCrewLayer(target,remaining,source);remaining=componentHit(target,target.powerPlant,remaining,source);remaining=hitWeaponLayer(target,"front",remaining,source)}
+    else if(side==="right"){remaining=hitWeaponLayer(target,"right",remaining,source);remaining=hitRandomInternal(target,remaining,source);remaining=hitWeaponLayer(target,"left",remaining,source)}
+    else if(side==="left"){remaining=hitWeaponLayer(target,"left",remaining,source);remaining=hitRandomInternal(target,remaining,source);remaining=hitWeaponLayer(target,"right",remaining,source)}
+    else if(side==="top"){remaining=hitWeaponLayer(target,"top",remaining,source);remaining=hitRandomInternal(target,remaining,source);remaining=hitWeaponLayer(target,"under",remaining,source)}
+    else {remaining=hitWeaponLayer(target,"under",remaining,source);remaining=hitRandomInternal(target,remaining,source);remaining=hitWeaponLayer(target,"top",remaining,source)}
+    recomputeInternal(target);if(remaining>0)log(`${remaining} damage passes completely through ${target.name}.`,"warn","damage");
+    if(!target.crew.some(member=>member.dp>0)){target.alive=false;log(`${target.name} has no surviving crew and is out of the duel!`,"bad","damage")}
+    return amount-remaining;
   }
   function damage(target, amount, side, source,options={}){
-    const incoming=Math.max(0,Math.floor(amount));let armorCost=incoming;
-    if(options.collision&&target.armorTypeKey==="metal")armorCost=Math.ceil(incoming/3);
-    const absorbedArmor=Math.min(target.armor[side]||0,armorCost);target.armor[side]=Math.max(0,(target.armor[side]||0)-absorbedArmor);
-    const absorbed=options.collision&&target.armorTypeKey==="metal"?Math.min(incoming,absorbedArmor*3):Math.min(incoming,absorbedArmor);amount=incoming-absorbed;
-    log(`${source}: ${target.name} ${side} armor absorbs ${absorbed}.`,"warn");
-    target.phaseDamage+=incoming;if(amount>0){target.internal-=amount;log(`${amount} internal damage penetrates!`,"bad");}
+    let incoming=Math.max(0,Math.floor(amount));const originalIncoming=incoming,armorBefore=target.armor[side]||0,spec=options.weaponSpec||null;
+    if(spec?.laser&&["reflective","lrfp"].includes(target.armorTypeKey)&&armorBefore>0)incoming=Math.floor(incoming/2);
+    let absorbedArmor=0,absorbed=0,penetrated=0;
+    if(target.armorTypeKey==="metal"){
+      if(options.collision){const metal=Combat.metalCollisionArmor(incoming,armorBefore);absorbed=metal.absorbed;absorbedArmor=metal.loss;target.armor[side]=Math.max(0,armorBefore-absorbedArmor);penetrated=metal.penetrated}
+      else if(spec){absorbed=Math.min(incoming,armorBefore);penetrated=Math.max(0,incoming-armorBefore);const loss=(options.damageRolls||[]).filter(value=>spec.burst?value>=5:value===6).length;target.armor[side]=Math.max(0,armorBefore-loss);absorbedArmor=loss}
+      else {absorbed=Math.min(incoming,armorBefore);penetrated=incoming-absorbed}
+    }else{absorbedArmor=Math.min(armorBefore,incoming);target.armor[side]=Math.max(0,armorBefore-absorbedArmor);absorbed=absorbedArmor;penetrated=incoming-absorbed}
+    log(`${source}: ${target.name} ${side} armor absorbs ${absorbed}${incoming!==originalIncoming?` after reflective armor halves the laser hit`:""}.`,"warn","damage");
+    target.phaseDamage+=incoming;
+    if(penetrated>0){log(`${penetrated} internal damage penetrates!`,"bad","damage");if(options.turret){const passed=hitWeaponLayer(target,"top",penetrated,source);recomputeInternal(target);if(passed)log(`${passed} damage passes above the vehicle after crossing the turret.`,"warn","damage")}else routeWeaponDamage(target,penetrated,side,source)}
     if(incoming>=10){debris.push({x:target.x+(random()-.5)*24,y:target.y+(random()-.5)*18,hitBy:new Set([target.id])});log(`${target.name} sheds road debris from the impact.`,"warn","damage")}
-    if(target.internal<=0){target.alive=false;log(`${target.name} is destroyed!`,"bad");}
-    return{incoming,absorbed,penetrated:Math.max(0,amount)};
+    if(target.internal<=0){target.alive=false;log(`${target.name} is destroyed!`,"bad","damage")}
+    return{incoming,absorbed,penetrated,armorBreached:target.armor[side]<=0};
   }
   function controlCheck(car,d,source="maneuver",options={}){
     if(d<=0)return true;car.handling=Math.max(-6,car.handling-d);const checkSpeed=options.speedOverride??car.speed,c=controlTable(checkSpeed,car.handling);
@@ -418,7 +481,7 @@
     if(type==="pivotL"||type==="pivotR")return"pivot";
     return"straight";
   }
-  function difficultyFor(car,mv){const type=maneuverRuleType(mv?.type),defaultAngle=(type==="bend"||type==="swerve")?15:0;return Rules.maneuverDifficulty(type,{angle:mv?.angle||defaultAngle,skidDistance:mv?.skidDistance,reverse:car.direction<0,surface:roadSurface,speed:car.speed})}
+  function difficultyFor(car,mv){const type=maneuverRuleType(mv?.type),defaultAngle=(type==="bend"||type==="swerve")?15:0,base=Rules.maneuverDifficulty(type,{angle:mv?.angle||defaultAngle,skidDistance:mv?.skidDistance,reverse:car.direction<0,surface:roadSurface,speed:car.speed});return base+(base>0&&car.oilContact?2:0)}
   function swerveEndpoint(car,side,angle,inches){
     const lateralSide=side==="left"?1:-1,offset=.25*SCALE*lateralSide;
     const shifted={...car,x:car.x+Math.cos(rad(car.heading+90))*offset,y:car.y+Math.sin(rad(car.heading+90))*offset};
@@ -484,58 +547,138 @@
     if(ok&&mv?.skidDistance){const skid=Rules.controlledSkid(mv.skidDistance);car.forcedMove={type:"controlledSkid",distance:Number(mv.skidDistance),momentumHeading:originalTravel,tireDamage:skid.tireDamage};car.pendingAutoDecel=skid.deceleration;car.firePenalty=Math.max(car.firePenalty,skid.firePenalty);log(`${car.name} sets up a ${mv.skidDistance}\" controlled skid for its next move.`,"warn","movement")}
     if(!ok){const remaining=Math.max(0,inches-1);if(remaining>0)crashMove(car,remaining)}car.crashMomentumHeading=null;
   }
-  function rangeModifier(range){
-    // Classic rules: point blank is less than 1 inch; long range is -1
-    // for every full 4 inches. Distances from 1.00 through 3.99 have no modifier.
-    if(range<1)return 4;
-    return -Math.floor(range/4);
+  const phaseSerial=()=>((turn-1)*5+phase);
+  const modifierText=value=>value>0?`+${value}`:`${value}`;
+  const weaponSpec=weapon=>Data.weapons[weapon?.key]||Data.weapons.mg;
+  const ammoText=weapon=>weapon?.ammo===null?"∞":Math.max(0,weapon?.ammo||0);
+  function firingCrew(car){const driver=car.crew.find(member=>member.role==="driver"&&member.dp>1),gunners=car.crew.filter(member=>member.role==="gunner"&&member.dp>1);return[...(driver?[driver]:[]),...gunners]}
+  function driverOperational(car){return Boolean(car.crew.find(member=>member.role==="driver"&&member.dp>1))}
+  function firingActionLimit(car){return firingCrew(car).length}
+  function firingActionsLeft(car){if(car.firingActionsTurn!==turn){car.firingActionsTurn=turn;car.firingActionsUsed=0}return Math.max(0,firingActionLimit(car)-car.firingActionsUsed)}
+  function selectedWeapons(car,value){
+    const selection=value||((car===player&&$("weaponSelect"))?$("weaponSelect").value:car.weapons[0]?.id);
+    if(String(selection).startsWith("link:")){const link=String(selection).slice(5);return car.weapons.filter(weapon=>weapon.link===link)}
+    const id=String(selection).replace(/^weapon:/,"");return car.weapons.filter(weapon=>weapon.id===id);
   }
-  function targetSpeedModifier(speed){
-    // The current arena uses the target-speed portion of the classic movement
-    // modifiers. The full relative-arc movement table is a later combat milestone.
-    if(speed===0)return 1;
-    if(speed>=80)return -6;
-    if(speed>=70)return -5;
-    if(speed>=60)return -4;
-    if(speed>=50)return -3;
-    if(speed>=40)return -2;
-    if(speed>=30)return -1;
-    return 0;
+  function segmentIntersectsRect(a,b,rect){
+    const steps=Math.max(2,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/8));
+    for(let i=1;i<steps;i++){const t=i/steps,x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t;if(x>=rect.x&&x<=rect.x+rect.w&&y>=rect.y&&y<=rect.y+rect.h)return true}return false;
   }
-  function shotCalculation(shooter,target){
-    const range=dist(shooter,target)/SCALE;
+  function segmentIntersectsHazard(a,b,hazard){const steps=Math.max(2,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/5)),angle=rad(-(hazard.heading||0)),halfL=hazard.length*SCALE/2,halfW=hazard.width*SCALE/2;for(let i=1;i<steps;i++){const t=i/steps,dx=a.x+(b.x-a.x)*t-hazard.x,dy=a.y+(b.y-a.y)*t-hazard.y,x=dx*Math.cos(angle)-dy*Math.sin(angle),y=dx*Math.sin(angle)+dy*Math.cos(angle);if(Math.abs(x)<=halfL&&Math.abs(y)<=halfW)return true}return false}
+  function mountOrigin(car,mount){const h=rad(car.heading),f={x:Math.cos(h),y:Math.sin(h)},s={x:-Math.sin(h),y:Math.cos(h)},offset={front:[18,0],back:[-18,0],left:[0,-10],right:[0,10],top:[0,0],under:[0,0]}[mount]||[0,0];return{x:car.x+f.x*offset[0]+s.x*offset[1],y:car.y+f.y*offset[0]+s.y*offset[1]}}
+  function cloudInterference(origin,target,spec){
+    let halfInches=0,blocked=false;
+    combatHazards.filter(hazard=>hazard.cloud&&hazard.active!==false).forEach(hazard=>{if(segmentIntersectsHazard(origin,target,hazard)){halfInches+=Math.max(1,Math.ceil(hazard.width/.5));if(spec.laser&&!spec.infrared)blocked=true}});
+    return{modifier:spec.infrared?0:-halfInches,damagePenalty:spec.infrared?halfInches:0,blocked};
+  }
+  function lineOfFire(shooter,target,weapon){
+    const spec=weaponSpec(weapon),origin=mountOrigin(shooter,weapon.mount);
+    const barrier=barriers.find(item=>!item.destroyed&&segmentIntersectsRect(origin,target,item));
+    if(barrier)return{clear:false,reason:`${barrier.id} blocks line of fire`,visibility:0,damagePenalty:0};
+    const clouds=cloudInterference(origin,target,spec);if(clouds.blocked)return{clear:false,reason:"smoke or paint blocks laser fire",visibility:clouds.modifier};
+    return{clear:true,visibility:clouds.modifier,damagePenalty:clouds.damagePenalty};
+  }
+  function movingTowardEachOther(a,b){const va={x:Math.cos(rad(movementHeading(a)))*(a.speed||0),y:Math.sin(rad(movementHeading(a)))*(a.speed||0)},vb={x:Math.cos(rad(movementHeading(b)))*(b.speed||0),y:Math.sin(rad(movementHeading(b)))*(b.speed||0)},delta={x:b.x-a.x,y:b.y-a.y};return (vb.x-va.x)*delta.x+(vb.y-va.y)*delta.y<0}
+  function targetRequest(car){return car===player?($("targetLocation")?.value||"auto"):"auto"}
+  function shotCalculation(shooter,target,weapon,request="auto",options={}){
+    weapon=weapon||shooter.weapons[0];const spec=weaponSpec(weapon),range=dist(shooter,target)/SCALE,movement=Combat.relativeMovementSpeed(shooter,target,movingTowardEachOther(shooter,target)),targetFace=sideHit(target,shooter),requestedSide=request.includes(":")||request==="turret"?"auto":request,sidePenalty=Combat.targetedSidePenalty(target,shooter,requestedSide),lof=lineOfFire(shooter,target,weapon);
+    const visibility={lightRain:-2,heavyRain:-3}[roadSurface]||0,specific=request.startsWith("tire:")?-3:request==="turret"?-2:0,surface=["oil","gravel"].includes(roadSurface)?-1:0,sustained=options.automatic?0:Combat.sustainedFireBonus(weapon,target.id,turn);
     const modifiers=[
-      {name:"Range",value:rangeModifier(range),detail:`${range.toFixed(2)} in`},
-      {name:"Target movement",value:targetSpeedModifier(target.speed),detail:`${target.speed} mph`},
+      {name:"Range",value:Combat.rangeModifier(range),detail:`${range.toFixed(2)} in`},
+      {name:"Relative movement",value:Combat.speedModifier(movement.speed),detail:`${Math.abs(movement.speed).toFixed(1)} mph · ${movement.firerInTarget}/${movement.targetInFirer}`},
+      {name:"Target stationary",value:target.speed===0?1:0,detail:target.speed===0?"yes":"no"},
       {name:"Firer stationary",value:shooter.speed===0?1:0,detail:shooter.speed===0?"yes":"no"},
-      {name:"Maneuver this phase",value:-(shooter.maneuverD||0),detail:`D${shooter.maneuverD||0}`},
-      {name:"Crash / skid penalty",value:-(shooter.firePenalty||0),detail:shooter.firePenalty?`-${shooter.firePenalty}`:"none"}
+      {name:"Vehicle profile",value:Combat.vehicleTargetModifier(target.bodyKey,targetFace),detail:`${target.bodyKey} · ${targetFace}`},
+      {name:"Specific target",value:specific,detail:request},
+      {name:"Target-side angle",value:sidePenalty??-99,detail:sidePenalty===null?"not visible":requestedSide},
+      {name:"Visibility",value:visibility+lof.visibility,detail:lof.damagePenalty?`IR damage -${lof.damagePenalty} per die`:lof.visibility?"cloud in line of fire":roadSurface},
+      {name:"Road surface",value:surface,detail:roadSurface},
+      {name:"Painted windshield",value:shooter.paintedUntil>=turn?-2:0,detail:shooter.paintedUntil>=turn?`through turn ${shooter.paintedUntil}`:"clear"},
+      {name:"Sustained fire",value:sustained,detail:sustained?`+${sustained}`:"none"},
+      {name:"Wounded firer",value:options.crewPenalty||0,detail:options.crewPenalty?"skill -2":"none"},
+      {name:"Maneuver this phase",value:options.automatic?0:-(shooter.maneuverD||0),detail:`D${shooter.maneuverD||0}`},
+      {name:"Crash / skid penalty",value:options.automatic?0:-(shooter.firePenalty||0),detail:shooter.firePenalty?`-${shooter.firePenalty}`:"none"}
     ];
-    const total=modifiers.reduce((sum,m)=>sum+m.value,0);
-    const base=7; // Front machine gun in the current prototype.
-    return {base,range,modifiers,total,targetNum:base-total};
+    if(spec.spikeGun&&request.startsWith("tire:")){const targetEntry=modifiers.find(item=>item.name==="Specific target");targetEntry.value=-4;targetEntry.detail="direct spike-gun shot"}
+    const total=modifiers.reduce((sum,item)=>sum+item.value,0),targetNum=spec.toHit===null?null:spec.toHit-total;
+    return{base:spec.toHit,range,movement,modifiers,total,targetNum,targetFace,sidePenalty,lof,request,spec};
   }
-  function modifierText(value){return value>0?`+${value}`:`${value}`}
-  function fire(shooter,target){
-    if(!shooter.alive||shooter.ammo<=0||shooter.lastFiredTurn===turn||shooter.weaponDP<=0||shooter.stunnedPhases>0)return false;
-    if(!inArc(shooter,target)){log(`${shooter.name}: target outside front firing arc.`,"bad","combat");return false}
-    if(shooter.firePenalty>=99){log(`${shooter.name}: aimed fire prohibited after loss of control.`,"bad","combat");return false}
-    const shot=shotCalculation(shooter,target);
-    const r=roll(2); shooter.ammo--; shooter.lastFiredTurn=turn; shooter.firedThisTurn=true;
-    const breakdown=shot.modifiers.filter(m=>m.value!==0).map(m=>`${m.name} ${modifierText(m.value)}`).join(", ")||"no modifiers";
-    log(`${shooter.name} fires Machine Gun: roll ${r}, needs ${shot.targetNum}+ [base ${shot.base}; ${breakdown}; total ${modifierText(shot.total)}].`,r>=shot.targetNum?"good":"bad","combat");
-    if(r===2||r<shot.targetNum){
-      log(`${shooter.name} misses ${target.name}.`,"bad","combat");
-    } else {
-      const dmg=roll(1); const side=sideHit(target,shooter);
-      log(`Hit! ${dmg} damage to ${target.name}'s ${side}.`,"good","damage"); damage(target,dmg,side,"Machine gun");
-      controlCheck(target,(dmg>=10?3:dmg>=6?2:1)+Rules.surfaceModifier(roadSurface),"hazard");
-    }
-    updateInspector();
-    return true;
+  function consumeWeapon(car,weapon){const spec=weaponSpec(weapon);if(weapon.ammo!==null)weapon.ammo=Math.max(0,weapon.ammo-1);if(spec.powerDrain)car.powerPlant.powerUnits=Math.max(0,car.powerPlant.powerUnits-spec.powerDrain);weapon.lastFiredTurn=turn;car.lastFiredTurn=turn;car.firedThisTurn=true}
+  function weaponReady(car,weapon,{automatic=false,resolving=false,simultaneous=false}={}){
+    const spec=weaponSpec(weapon);if(!weapon||(!simultaneous&&weapon.dp<=0))return"destroyed";if(!automatic&&weapon.automatic)return"set to automatic fire";if(!resolving&&weapon.queuedTurn===turn)return"queued for this phase";if(weapon.ammo!==null&&weapon.ammo<=0)return"out of ammunition";if(weapon.lastFiredTurn===turn&&!(automatic&&spec.dropped))return"already fired this turn";if(spec.laser&&!simultaneous&&(car.powerPlant.dp<=0||car.powerPlant.powerUnits<(spec.powerDrain||0)))return"insufficient power";if(!automatic&&car.firePenalty>=99)return"aimed fire prohibited after loss of control";return"";
+  }
+  function addFireExposure(target,spec,result){if(!spec.fireModifier||(["reflective","lrfp"].includes(target.armorTypeKey)&&spec.laser&&!result.penetrated))return;if(["fireproof","lrfp","metal"].includes(target.armorTypeKey)&&!result.penetrated)return;target.fireExposures.push({value:spec.fireModifier,expiresTurn:turn+(spec.burnDuration||0),source:spec.name})}
+  function weaponDamageHazard(target,total){if(total<=0)return;controlCheck(target,(total>=10?3:total>=6?2:1)+Rules.surfaceModifier(roadSurface)+(target.oilContact?2:0),"hazard")}
+  function applyDirectHit(shooter,target,weapon,shot){
+    const spec=shot.spec,request=shot.request,damageRoll=Combat.rollDamage(spec.damage,()=>roll(1));let amount=damageRoll.total;if(spec.infrared&&shot.lof.damagePenalty){const parsed=Combat.parseDamage(spec.damage);amount=Math.max(0,damageRoll.rolls.reduce((sum,value)=>sum+Math.max(0,value-shot.lof.damagePenalty),0)+parsed.modifier);log(`${spec.name} loses ${shot.lof.damagePenalty} point per damage die while crossing smoke or paint.`,"warn","combat")}
+    if(request.startsWith("tire:")){const key=request.slice(5);damageTire(target,key,amount,spec.name);log(`Hit! ${spec.name} does ${amount} to ${target.name}'s ${key.toUpperCase()} tire.`,"good","damage");return amount}
+    if(spec.spikeGun){log(`${spec.name} can damage vehicles only through a direct tire shot.`,"warn","combat");return 0}
+    const side=request==="turret"?"top":request!=="auto"&&["front","right","back","left"].includes(request)?request:shot.targetFace;
+    log(`Hit! ${spec.name} does ${amount} damage to ${target.name}'s ${request==="turret"?"turret":side}.`,"good","damage");const result=damage(target,amount,side,spec.name,{weaponSpec:spec,damageRolls:damageRoll.rolls,turret:request==="turret"});addFireExposure(target,spec,result);
+    if(spec.createsSmoke)createCloud("smoke",(shooter.x+target.x)/2,(shooter.y+target.y)/2,Math.atan2(target.y-shooter.y,target.x-shooter.x)*180/Math.PI,60*5);
+    return amount;
+  }
+  function createCloud(type,x,y,heading=0,lifetimePhases=300){const dimensions=type==="whitePhosphorus"?{length:1,width:1}:Combat.hazardDimensions(type);combatHazards.push({id:`h${++hazardId}`,type,cloud:type==="smoke"||type==="paint"||type==="whitePhosphorus",x,y,heading,length:dimensions.length,width:dimensions.width,createdSerial:phaseSerial(),armedSerial:type==="flamingOil"?phaseSerial()+1:phaseSerial(),expiresSerial:phaseSerial()+lifetimePhases,checkedBy:[],active:true});return combatHazards.at(-1)}
+  function dropPoint(car,mount){let effective=mount;if(car.direction<0){if(mount==="front")effective="back";else if(mount==="back")effective="front"}const center={front:0,right:90,back:180,left:-90}[effective];if(center===undefined)return{x:car.x,y:car.y,heading:car.heading};const heading=Combat.norm(car.heading+center),distance=(effective==="front"||effective==="back")?24:20;return{x:car.x+Math.cos(rad(heading))*distance,y:car.y+Math.sin(rad(heading))*distance,heading}}
+  function deployWeapon(car,weapon,options={}){
+    const spec=weaponSpec(weapon),point=dropPoint(car,weapon.mount),type=spec.cloud||spec.hazard;if(!type)return false;const dimensions=Combat.hazardDimensions(type),hazard={id:`h${++hazardId}`,type,cloud:Boolean(spec.cloud),x:point.x,y:point.y,heading:point.heading,length:dimensions.length,width:dimensions.width,createdSerial:phaseSerial(),armedSerial:type==="flamingOil"?phaseSerial()+1:phaseSerial(),expiresSerial:type==="paint"?(turn+1)*5:type==="flamingOil"?phaseSerial()+26:Infinity,checkedBy:[],ownerId:car.id,active:true};combatHazards.push(hazard);Combat.updateSustainedFire(weapon,null,turn,true);consumeWeapon(car,weapon);log(`${car.name} deploys ${spec.name} from its ${weapon.mount} mount${options.automatic?" on automatic":""}.`,"good","combat");return true
+  }
+  function launchGrenade(shooter,target,weapon,shot){Combat.updateSustainedFire(weapon,target.id,turn,false);consumeWeapon(shooter,weapon);pendingGrenades.push({id:`g${++hazardId}`,ownerId:shooter.id,weaponId:weapon.id,grenadeType:weapon.grenadeType||"explosive",x:target.x,y:target.y,shot,dueSerial:phaseSerial()+5});log(`${shooter.name} launches a ${Data.grenades[weapon.grenadeType||"explosive"].name} grenade; impact is due one second later.`,"good","combat")}
+  function resolveGrenade(grenade){
+    const shooter=grenade.ownerId==="player"?player:ai,spec=Data.grenades[grenade.grenadeType],r=roll(2);let x=grenade.x,y=grenade.y;
+    if(r!==12){const missedBy=Math.max(0,grenade.shot.targetNum-r),scatter=Combat.grenadeScatter(missedBy,()=>roll(1))*SCALE,angle=random()*Math.PI*2;x+=Math.cos(angle)*scatter;y+=Math.sin(angle)*scatter}
+    log(`${spec.name} grenade lands${r===12?" exactly on target":` at ${x.toFixed(0)}, ${y.toFixed(0)} (roll ${r})`}.`,r>=grenade.shot.targetNum?"good":"warn","combat");
+    if(spec.effect==="flamingOil")createCloud("flamingOil",x,y,0,26);else if(["paint","smoke"].includes(spec.effect))createCloud(spec.effect,x,y,0,spec.effect==="paint"?10:300);else if(spec.effect==="whitePhosphorus"){createCloud("whitePhosphorus",x,y,0,300);[player,ai].filter(car=>car.alive&&Math.hypot(car.x-x,car.y-y)<=.5*SCALE).forEach(car=>{const result=Combat.rollDamage("1d",()=>roll(1)),amount=Math.ceil(result.total/2);const hit=damage(car,amount,sideHit(car,{x,y}),"White Phosphorus",{weaponSpec:spec,damageRolls:result.rolls});addFireExposure(car,spec,hit)})}
+    else if(spec.effect==="foam"){[player,ai].filter(car=>Math.hypot(car.x-x,car.y-y)<=.5*SCALE).forEach(car=>{if(car.burning&&roll(1)===1){car.burning=false;log(`${car.name}'s fire is extinguished by foam.`,"good","combat")}car.paintedUntil=Math.max(car.paintedUntil,turn+3)})}
+    else if(spec.damage){[player,ai].filter(car=>car.alive&&Math.hypot(car.x-x,car.y-y)<=.5*SCALE).forEach(car=>{const result=Combat.rollDamage(spec.damage,()=>roll(1)),amount=spec.vehicleHalf?Math.ceil(result.total/2):result.total;const hit=damage(car,amount,sideHit(car,{x,y}),`${spec.name} grenade`,{weaponSpec:spec,damageRolls:result.rolls});addFireExposure(car,spec,hit);weaponDamageHazard(car,amount)})}
+    else if(spec.effect==="crewStun"){[player,ai].filter(car=>Math.hypot(car.x-x,car.y-y)<=2*SCALE&&(car.armor[sideHit(car,{x,y})]||0)<=0).forEach(car=>{car.stunnedPhases=Math.max(car.stunnedPhases,5);log(`${car.name}'s exposed crew is stunned by concussion.`,"bad","control")})}
+  }
+  function resolvePendingGrenades(){for(let i=pendingGrenades.length-1;i>=0;i--)if(pendingGrenades[i].dueSerial<=phaseSerial()){const grenade=pendingGrenades.splice(i,1)[0];resolveGrenade(grenade)}}
+  function resolveShot(shooter,target,weapon,request,options={}){
+    const ready=weaponReady(shooter,weapon,options);if(ready){log(`${shooter.name}'s ${weapon.name}: ${ready}.`,"bad","combat");return{fired:false,damage:0}}
+    const spec=weaponSpec(weapon);if(spec.dropped)return{fired:deployWeapon(shooter,weapon,options),damage:0};
+    if(options.automatic){const center=Combat.mountArcCenter(shooter,weapon.mount),bearing=Combat.norm(Math.atan2(target.y-shooter.y,target.x-shooter.x)*180/Math.PI);if(center===null||Combat.angleDifference(center,bearing)>4){Combat.updateSustainedFire(weapon,null,turn,true);consumeWeapon(shooter,weapon);log(`${shooter.name}'s automatic ${weapon.name} fires straight from the ${weapon.mount} mount without crossing a target.`,"warn","combat");return{fired:true,damage:0}}}
+    if(request==="turret"&&!target.weapons.some(item=>item.mount==="top"&&item.dp>0)){log(`${target.name} has no operational turret to target.`,"bad","combat");return{fired:false,damage:0}}
+    if(!Combat.inMountArc(shooter,target,weapon.mount)){log(`${shooter.name}'s ${weapon.name}: target outside ${weapon.mount} firing arc.`,"bad","combat");return{fired:false,damage:0}}
+    const shot=shotCalculation(shooter,target,weapon,request,options);if(!shot.lof.clear){log(`${shooter.name}'s ${weapon.name}: ${shot.lof.reason}.`,"bad","combat");return{fired:false,damage:0}}
+    if(shot.sidePenalty===null){log(`${shooter.name}: requested target side is not exposed.`,"bad","combat");return{fired:false,damage:0}}
+    if(spec.maxRange&&shot.range>spec.maxRange){log(`${weapon.name} maximum range is ${spec.maxRange} inches.`,"bad","combat");return{fired:false,damage:0}}
+    if(spec.grenadeLauncher){launchGrenade(shooter,target,weapon,shot);return{fired:true,damage:0}}
+    if(spec.spikeGun&&!request.startsWith("tire:")){Combat.updateSustainedFire(weapon,target.id,turn,Boolean(options.automatic));consumeWeapon(shooter,weapon);const r=roll(2),missed=Math.max(0,shot.targetNum-r),scatter=Combat.grenadeScatter(missed,()=>roll(1))*SCALE,angle=random()*Math.PI*2,x=target.x+Math.cos(angle)*scatter,y=target.y+Math.sin(angle)*scatter,dimensions=Combat.hazardDimensions("spikes");combatHazards.push({id:`h${++hazardId}`,type:"spikes",x,y,heading:0,length:dimensions.length,width:dimensions.width,createdSerial:phaseSerial(),armedSerial:phaseSerial(),expiresSerial:Infinity,checkedBy:[],ownerId:shooter.id,active:true});log(`${shooter.name} fires ${weapon.name} into the arena; spike field lands near the target.`,"good","combat");return{fired:true,damage:0}}
+    const projectiles=spec.projectiles||1;Combat.updateSustainedFire(weapon,target.id,turn,Boolean(options.automatic));consumeWeapon(shooter,weapon);let totalDamage=0;
+    for(let i=0;i<projectiles;i++){const r=roll(2),hit=r!==2&&shot.targetNum<=12&&r>=shot.targetNum,breakdown=shot.modifiers.filter(item=>item.value).map(item=>`${item.name} ${modifierText(item.value)}`).join(", ")||"no modifiers";log(`${shooter.name} fires ${weapon.name}${projectiles>1?` rocket ${i+1}/${projectiles}`:""}: roll ${r}, needs ${shot.targetNum}+ [${breakdown}].`,hit?"good":"bad","combat");if(hit)totalDamage+=applyDirectHit(shooter,target,weapon,shot);else log(`${shooter.name} misses ${target.name}.`,"bad","combat")}
+    return{fired:true,damage:totalDamage};
+  }
+  function resolveFireGroup(shooter,target,group,request,options={}){const sameAim=group.every(weapon=>weapon.key===group[0].key&&weapon.mount===group[0].mount);let fired=false,total=0;group.forEach((weapon,index)=>{const result=resolveShot(shooter,target,weapon,request,{...options,resolving:true,automatic:options.automatic||(!sameAim&&index>0)});weapon.queuedTurn=0;fired=fired||result.fired;total+=result.damage});if(total)weaponDamageHazard(target,total);return fired}
+  function resolveFireIntents(){const intents=pendingFireIntents.splice(0,pendingFireIntents.length),prepared=intents.map(intent=>{const shooter=intent.shooterId==="player"?player:ai,target=intent.targetId==="player"?player:ai,group=intent.weaponIds.map(id=>shooter.weapons.find(weapon=>weapon.id===id)).filter(weapon=>weapon&&weaponReady(shooter,weapon,{resolving:true})==="");return{shooter,target,group,request:intent.request,crewPenalty:intent.crewPenalty}});prepared.forEach(item=>resolveFireGroup(item.shooter,item.target,item.group,item.request,{simultaneous:true,crewPenalty:item.crewPenalty}));if(intents.length)log(`All declared fire for the phase resolves simultaneously.`,"warn","combat")}
+  function fire(shooter,target,selection,options={}){
+    if(!shooter.alive||shooter.stunnedPhases>0)return false;const group=selectedWeapons(shooter,selection);if(!group.length)return false;
+    if(options.automatic)return resolveFireGroup(shooter,target,group,"auto",options);
+    if(firingActionsLeft(shooter)<=0){log(`${shooter.name} has no firing actions left this turn.`,"bad","combat");return false}const ready=group.filter(weapon=>weaponReady(shooter,weapon)==="");if(!ready.length){log(`${shooter.name}'s selected weapon${group.length>1?"s are":" is"} not ready.`,"bad","combat");return false}
+    const request=targetRequest(shooter),operator=firingCrew(shooter)[shooter.firingActionsUsed];ready.forEach(weapon=>weapon.queuedTurn=turn);pendingFireIntents.push({shooterId:shooter.id,targetId:target.id,weaponIds:ready.map(weapon=>weapon.id),request,crewPenalty:operator?.dp<3?-2:0,declaredTurn:turn,declaredPhase:phase});shooter.firingActionsUsed++;shooter.firingActionsTurn=turn;log(`${operator?.name||"Crew"} in ${shooter.name} declares ${ready.length>1?`linked fire (${ready.length} weapons)`:ready[0].name}; it will resolve after phase movement.`,"good","combat");updateUI();return true;
+  }
+  function toggleAutomatic(car){const weapon=selectedWeapons(car)[0];if(!weapon)return;if(firingActionsLeft(car)<=0){log(`${car.name} has no firing action available to change automatic fire.`,"bad","combat");return}const spec=weaponSpec(weapon);if(weapon.mount==="top"&&!spec.dropped){log("Turret weapons cannot be placed on automatic.","bad","combat");return}weapon.automatic=!weapon.automatic;weapon.sustainedTurns=0;car.firingActionsUsed++;car.firingActionsTurn=turn;log(`${car.name} switches ${weapon.name} automatic fire ${weapon.automatic?"on":"off"}.`,"warn","combat");updateUI()}
+  function resolveAutomaticDropped(car,moved){if(!moved)return;car.weapons.filter(weapon=>weapon.automatic&&weaponSpec(weapon).dropped).forEach(weapon=>{if(weaponReady(car,weapon,{automatic:true})==="")deployWeapon(car,weapon,{automatic:true})})}
+  function resolveAutomaticFire(car,target){car.weapons.filter(weapon=>weapon.automatic&&!weaponSpec(weapon).dropped).forEach(weapon=>{if(weaponReady(car,weapon,{automatic:true})==="")resolveShot(car,target,weapon,"auto",{automatic:true})})}
+  function fireDamagesVehicle(car){
+    Object.keys(car.armor).forEach(side=>car.armor[side]=Math.max(0,car.armor[side]-1));
+    car.weapons.forEach(weapon=>{if(weapon.dp>0)weapon.dp--});if(car.powerPlant.dp>0)car.powerPlant.dp--;if(car.cargo.dp>0)car.cargo.dp--;car.crew.forEach(member=>{if(member.dp>0)member.dp--});Object.keys(car.tireDP).forEach(key=>damageTire(car,key,1,"Vehicle fire"));recomputeInternal(car);
+    if(car.powerPlant.dp<=0){car.accel=0;car.powerPlant.powerUnits=0}if(!car.crew.some(member=>member.dp>0))car.alive=false;
+    log(`Vehicle fire deals 1 point to every armor face, component, occupant, and tire on ${car.name}.`,"bad","damage")
+  }
+  function explosiveLoad(car){return car.weapons.some(weapon=>weaponSpec(weapon).volatile)}
+  function explodeVehicle(car){car.alive=false;car.crew.forEach(member=>member.dp=0);log(`${car.name} explodes!`,"bad","damage");addImpactMark(car.x,car.y,"EXPLOSION");const other=car===player?ai:player;if(other.alive&&dist(car,other)<=2*SCALE){const amount=roll(1),side=sideHit(other,car);damage(other,amount,side,"Vehicle explosion");log(`${other.name} takes ${amount} blast damage.`,"bad","damage")}}
+  function resolveEndTurnFire(car){
+    car.fireExposures=car.fireExposures.filter(exposure=>exposure.expiresTurn>=turn);const modifier=car.fireExposures.reduce((sum,exposure)=>sum+exposure.value,0);
+    if(!car.burning&&car.componentFireChance){const componentRoll=roll(1);log(`${car.name} damaged-component fire check: ${componentRoll}, fire starts on ${car.componentFireChance} or less.`,componentRoll<=car.componentFireChance?"bad":"good","combat");if(componentRoll<=car.componentFireChance)car.burning=true}car.componentFireChance=0;
+    if(!car.burning&&modifier>0){const result=roll(2);log(`${car.name} fire check: ${result}, fire starts on ${modifier} or less.`,result<=modifier?"bad":"good","combat");if(result<=modifier)car.burning=true}
+    if(car.burning){fireDamagesVehicle(car);if(explosiveLoad(car)&&roll(1)===1)explodeVehicle(car)}
+    car.fireExposures=car.fireExposures.filter(exposure=>exposure.expiresTurn>turn);
+    if((car.powerPlant.dp<=0||!driverOperational(car))&&car.speed>0){car.speed=Math.max(0,car.speed-5);log(`${car.name} decelerates 5 mph because ${car.powerPlant.dp<=0?"its power plant is destroyed":"its driver is incapacitated"}.`,"warn","movement")}
+    if(!driverOperational(car)&&car.speed===0){const substitute=car.crew.find(member=>member.role==="gunner"&&member.dp>1);if(substitute){car.substituteProgress=(car.substituteProgress||0)+1;if(car.substituteProgress>=5){substitute.role="driver";substitute.name="Substitute Driver";car.substituteProgress=0;log(`${car.name}'s gunner takes the controls as substitute driver.`,"good","control")}else log(`${car.name} substitute-driver changeover: ${car.substituteProgress}/5 turns.`,"warn","control")}}else car.substituteProgress=0;
   }
   function aiChoice(){
-    if(!ai.alive)return {type:"straight",d:0};
+    if(!ai.alive||!driverOperational(ai))return {type:"straight",d:0};
     const desired=norm(Math.atan2(player.y-ai.y,player.x-ai.x)*180/Math.PI);
     let delta=norm(desired-ai.heading); if(delta>180)delta-=360;
     if(Math.abs(delta)>10)return delta<0?{type:"bendL",d:1}:{type:"bendR",d:1};
@@ -543,10 +686,10 @@
   }
   function aiAct(){
     const mv=ai.stunnedPhases?{type:"straight",d:0}:aiChoice(); ai.maneuverD=difficultyFor(ai,mv); performMove(ai,mv);
-    if(ai.alive && player.alive && !ai.stunnedPhases && inArc(ai,player) && random()<.75)fire(ai,player);
   }
+  function aiFireDecision(){if(!ai.alive||!player.alive||ai.stunnedPhases||random()>=.75)return;const candidates=ai.weapons.filter(weapon=>weaponReady(ai,weapon)===""&&(weaponSpec(weapon).dropped||Combat.inMountArc(ai,player,weapon.mount)));candidates.sort((a,b)=>Combat.parseDamage(weaponSpec(b).damage).dice-Combat.parseDamage(weaponSpec(a).damage).dice);if(candidates[0])fire(ai,player,`weapon:${candidates[0].id}`)}
   function clone(v){return JSON.parse(JSON.stringify(v))}
-  function snapshot(label="Phase resolved"){const frame={turn,phase,label,rngState,player:clone(player),ai:clone(ai),events:replay.events.length};replay.frames.push(frame);replayIndex=replay.frames.length-1;updateReplayUI()}
+  function snapshot(label="Phase resolved"){const frame={turn,phase,label,rngState,player:clone(player),ai:clone(ai),combatHazards:clone(combatHazards),pendingGrenades:clone(pendingGrenades),pendingFireIntents:clone(pendingFireIntents),events:replay.events.length};replay.frames.push(frame);replayIndex=replay.frames.length-1;updateReplayUI()}
   function resumeLive(){
     if(replayReadOnly){toast("Imported replays are view-only.");return false}
     stopReplay();
@@ -560,7 +703,7 @@
     if(!replay.frames.length)return;
     replayIndex=Math.max(0,Math.min(i,replay.frames.length-1));
     const f=replay.frames[replayIndex];
-    player=clone(f.player);ai=clone(f.ai);turn=f.turn;phase=f.phase;rngState=f.rngState||rngState;
+    player=clone(f.player);ai=clone(f.ai);turn=f.turn;phase=f.phase;rngState=f.rngState||rngState;combatHazards.splice(0,combatHazards.length,...clone(f.combatHazards||[]));pendingGrenades.splice(0,pendingGrenades.length,...clone(f.pendingGrenades||[]));pendingFireIntents.splice(0,pendingFireIntents.length,...clone(f.pendingFireIntents||[]));
     // Returning to the newest frame of the current game means returning to live play.
     replayMode=!(autoResume && !replayReadOnly && replayIndex===replay.frames.length-1);
     updateUI();draw();updateReplayUI();
@@ -576,7 +719,7 @@
   function stopReplay(){if(replayTimer){clearInterval(replayTimer);replayTimer=null}if($("replayPlay"))$("replayPlay").textContent="Play"}
   function toggleReplayPlay(){if(replayTimer){stopReplay();return}if(!replay.frames.length)return;if(!replayMode&&!replayReadOnly)restoreFrame(0,{autoResume:false});$("replayPlay").textContent="Pause";replayTimer=setInterval(()=>{if(replayIndex>=replay.frames.length-1){stopReplay();if(!replayReadOnly)resumeLive();return}restoreFrame(replayIndex+1)},500)}
   function canChooseManeuver(type=selected.type){
-    if(player.crashState||player.forcedMove||player.stunnedPhases>0)return false;
+    if(player.crashState||player.forcedMove||player.stunnedPhases>0||!driverOperational(player))return false;
     if(type==="pivotL"||type==="pivotR")return player.speed===5&&moveDist(player)>=.5;
     return moveDist(player)>=1;
   }
@@ -609,7 +752,7 @@
     pendingSpeedDelta=options.includes(delta)?delta:0;updateUI();draw();
   }
   function applyPendingSpeed(){
-    if(player.changedSpeed||pendingSpeedDelta===0)return;
+    if(player.changedSpeed||pendingSpeedDelta===0||!driverOperational(player))return;
     const before=player.speed, after=projectedSpeed(),deceleration=Math.max(0,before-after);
     if(deceleration>10){
       const baseD=Rules.brakingDifficulty(deceleration),d=baseD+Rules.surfaceModifier(roadSurface);player.crashMomentumHeading=movementHeading(player);
@@ -634,17 +777,27 @@
     // as a bend or swerve becomes the current selection.
     updateUI();draw()
   }
+  function populateWeaponChoices(){
+    const select=$("weaponSelect");if(!select)return;const previous=select.value,options=[];
+    player.weapons.forEach((weapon,index)=>{const spec=weaponSpec(weapon),status=weapon.dp<=0?"DESTROYED":weapon.ammo===0?"EMPTY":`${ammoText(weapon)} ammo`;options.push({value:`weapon:${weapon.id}`,label:`${index+1}. ${weapon.name} · ${weapon.mount.toUpperCase()} · ${status}`})});
+    const links=[...new Set(player.weapons.map(weapon=>weapon.link).filter(Boolean))];links.forEach(link=>{const count=player.weapons.filter(weapon=>weapon.link===link).length;if(count>1)options.push({value:`link:${link}`,label:`LINK ${link} · ${count} weapons`})});
+    select.innerHTML=options.map(option=>`<option value="${option.value}">${option.label}</option>`).join("");if(options.some(option=>option.value===previous))select.value=previous;
+  }
   function updateUI(){
     $("turnNum").textContent=turn;$("phaseNum").textContent=phase;$("speed").textContent=`${player.direction<0?"R ":""}${player.speed}`;$("handling").textContent=player.handling;
-    $("ammo").textContent=player.ammo;$("weaponDP").textContent=player.weaponDP;
+    populateWeaponChoices();const combatSelection=selectedWeapons(player),activeWeapon=combatSelection[0],activeSpec=weaponSpec(activeWeapon);player.ammo=activeWeapon?.ammo??0;player.weaponDP=activeWeapon?.dp??0;player.weaponName=activeWeapon?.name||"No weapon";
+    $("ammo").textContent=ammoText(activeWeapon);$("weaponDP").textContent=activeWeapon?.dp??0;if($("powerUnits"))$("powerUnits").textContent=player.powerPlant?.powerUnits??0;if($("fireActions"))$("fireActions").textContent=firingActionsLeft(player);
     $("armor").innerHTML=Object.entries(player.armor).map(([k,v])=>`<div>${k}<strong>${v}</strong></div>`).join("");
     $("phasebar").innerHTML=[1,2,3,4,5].map(p=>`<div class="phase ${p===phase?'active':''}">${p}</div>`).join("");
     const controlsLocked=replayMode||locked||!player.alive;
-    const speedLocked=controlsLocked||player.changedSpeed||player.forcedMove||player.stunnedPhases>0;
+    const speedLocked=controlsLocked||player.changedSpeed||player.forcedMove||player.stunnedPhases>0||!driverOperational(player);
     populateSpeedChoices();
     if($("speedChange"))$("speedChange").disabled=speedLocked;
-    if($("reverse")){$("reverse").disabled=controlsLocked||player.speed!==0||player.stoppedTurns<1;$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
-    $("fire").disabled=controlsLocked||player.lastFiredTurn===turn||player.ammo<=0||player.stunnedPhases>0||player.firePenalty>=99;
+    if($("reverse")){$("reverse").disabled=controlsLocked||player.speed!==0||player.stoppedTurns<1||!driverOperational(player);$("reverse").textContent=player.direction<0?"Select Forward Gear":"Select Reverse Gear";}
+    const selectedReady=combatSelection.some(weapon=>weaponReady(player,weapon)===""),isLink=$("weaponSelect")?.value.startsWith("link:");
+    $("fire").disabled=controlsLocked||!activeWeapon||!selectedReady||player.stunnedPhases>0||firingActionsLeft(player)<=0||(!activeSpec.dropped&&player.firePenalty>=99);$("fire").textContent=activeSpec.dropped?"Deploy Selected":activeSpec.grenadeLauncher?"Launch Grenade":"Fire Selected";
+    if($("toggleAuto")){$("toggleAuto").disabled=controlsLocked||!activeWeapon||isLink||activeWeapon.dp<=0||firingActionsLeft(player)<=0;$("toggleAuto").textContent=`Automatic: ${activeWeapon?.automatic?"On":"Off"}`;$("toggleAuto").classList.toggle("selected",Boolean(activeWeapon?.automatic))}
+    if($("weaponHelp")&&activeWeapon){const effect=activeSpec.dropped?`Deploys ${activeSpec.cloud||activeSpec.hazard}; no to-hit roll.`:`To hit ${activeSpec.toHit}+ · ${activeSpec.damage} damage${activeSpec.maxRange?` · max ${activeSpec.maxRange} in`:""}.`;$("weaponHelp").textContent=`${activeWeapon.name} · ${activeWeapon.mount.toUpperCase()} mount · ${effect}${activeWeapon.link?` Link ${activeWeapon.link}.`:""}`}
     const maneuverLocked=controlsLocked||player.crashState||player.forcedMove||player.stunnedPhases>0||moveDist(player)<1;
     ["bendLeft","bendRight","bendAngle","driftL","driftR","steepDriftL","steepDriftR","swerveL","swerveR","skidDistance","controlledSkid","tstopL","tstopR","bootleggerL","bootleggerR","straight"].forEach(id=>{if($(id))$(id).disabled=maneuverLocked});
     const pivotLocked=controlsLocked||!canChooseManeuver("pivotL");["pivotAngle","pivotL","pivotR"].forEach(id=>{if($(id))$(id).disabled=pivotLocked});
@@ -652,7 +805,7 @@
     const emergencyLocked=maneuverLocked||player.turnStartSpeed<20||player.turnStartSpeed>35||pendingSpeedDelta!==0;["tstopL","tstopR","bootleggerL","bootleggerR"].forEach(id=>{if($(id))$(id).disabled=emergencyLocked});
     $("commit").disabled=controlsLocked;
     if(!controlsLocked){
-      const reason=player.stunnedPhases?`Driver stunned for ${player.stunnedPhases} more phase${player.stunnedPhases===1?"":"s"}; vehicle continues straight.`:player.forcedMove?`${player.forcedMove.type} movement is committed and will resolve automatically.`:player.crashState?`Maneuvers unavailable during ${player.crashState.type}.`:moveDist(player)<=0?`No vehicle movement is scheduled in Phase ${phase}.`:moveDist(player)<1?`Half-move: straight only${player.speed===5?", or choose a pivot":""}.`:`Choose a maneuver and speed change, then commit.`;
+      const reason=!driverOperational(player)?`Driver incapacitated: the vehicle continues straight and decelerates 5 mph per turn.`:player.stunnedPhases?`Driver stunned for ${player.stunnedPhases} more phase${player.stunnedPhases===1?"":"s"}; vehicle continues straight.`:player.forcedMove?`${player.forcedMove.type} movement is committed and will resolve automatically.`:player.crashState?`Maneuvers unavailable during ${player.crashState.type}.`:moveDist(player)<=0?`No vehicle movement is scheduled in Phase ${phase}.`:moveDist(player)<1?`Half-move: straight only${player.speed===5?", or choose a pivot":""}.`:`Choose a maneuver and speed change, then commit.`;
       if(!canChooseManeuver())$("previewText").textContent=reason;
     }
     updateInspector();updateReplayUI();
@@ -670,12 +823,13 @@
       <div><b>Position</b>${car.x.toFixed(1)}, ${car.y.toFixed(1)}</div><div><b>Speed</b>${car.speed} mph</div>
       <div><b>Heading</b>${headingBearing.toFixed(0)}°</div><div><b>Momentum</b>${travelBearing.toFixed(0)}°</div>
       <div><b>Handling</b>${car.handling}</div><div><b>HC</b>${car.hc}</div>
-      <div><b>Crash state</b><span class="statusBadge ${statusClass}">${crash}</span></div><div><b>Internal</b>${car.internal}</div>
+      <div><b>Crash state</b><span class="statusBadge ${statusClass}">${crash}</span></div><div><b>Internal DP</b>${car.internal}</div>
       <div><b>Direction</b>${car.direction<0?"reverse":"forward"}</div><div><b>Replay</b>${replayMode?"REPLAY":"LIVE"} · ${frameText}</div>
       <div><b>Weight / DM</b>${car.weight} lb / ${car.damageModifier.toFixed(2)}</div><div><b>Surface</b>${roadSurface}</div>
-      <div><b>Last collision</b>${car.lastCollision?`${collisionLabel(car.lastCollision.type)} · ${car.lastCollision.speed} mph · ${car.lastCollision.face}`:"none"}</div><div><b>Driver</b>${car.stunnedPhases?`stunned ${car.stunnedPhases} phase(s)`:"ready"}</div>
+      <div><b>Last collision</b>${car.lastCollision?`${collisionLabel(car.lastCollision.type)} · ${car.lastCollision.speed} mph · ${car.lastCollision.face}`:"none"}</div><div><b>Driver</b>${car.crew?.find(member=>member.role==="driver")?.dp??3} DP${car.stunnedPhases?` · stunned ${car.stunnedPhases} phase(s)`:""}</div>
+      <div><b>Power plant</b>${car.powerPlant?.dp??0}/${car.powerPlant?.maxDP??0} DP · ${car.powerPlant?.powerUnits??0} PU</div><div><b>Combat status</b>${car.burning?'<span class="statusBadge burningBadge">burning</span>':car.paintedUntil>=turn?'<span class="statusBadge paintBadge">painted</span>':"ready"}</div>
       <div title="The fixed starting value used to reproduce this game's random rolls."><b>Random seed</b>${rngSeed}</div><div class="advancedRng" title="The generator's current internal value after random rolls have been consumed."><b>RNG state</b>${rngState}</div>
-      ${(()=>{const target=car===player?ai:player,shot=shotCalculation(car,target);return `<div class="shotInspector"><b>Current Machine-Gun Shot</b><span>Base to-hit</span><strong>${shot.base}+</strong>${shot.modifiers.map(m=>`<span>${m.name}<small>${m.detail}</small></span><strong class="${m.value>0?'modPositive':m.value<0?'modNegative':''}">${modifierText(m.value)}</strong>`).join('')}<span>Total modifier</span><strong>${modifierText(shot.total)}</strong><span>Final roll needed</span><strong>${shot.targetNum}+</strong><em>Preview only. Full relative-arc movement modifiers, computers, skill, visibility, specific targets, and sustained fire are not implemented yet.</em></div>`})()}`;
+      ${(()=>{const target=car===player?ai:player,weapon=car===player?selectedWeapons(car)[0]:car.weapons.find(item=>item.dp>0),request=car===player?targetRequest(car):"auto";if(!weapon)return"";const spec=weaponSpec(weapon);if(spec.dropped)return`<div class="shotInspector"><b>${weapon.name} · ${weapon.mount.toUpperCase()}</b><em>Dropped weapon: placement and contact effects are automatic.</em></div>`;const shot=shotCalculation(car,target,weapon,request);return `<div class="shotInspector"><b>${weapon.name} · ${weapon.mount.toUpperCase()} shot</b><span>Base to-hit</span><strong>${shot.base}+</strong>${shot.modifiers.map(m=>`<span>${m.name}<small>${m.detail}</small></span><strong class="${m.value>0?'modPositive':m.value<0?'modNegative':''}">${modifierText(m.value)}</strong>`).join('')}<span>Total modifier</span><strong>${modifierText(shot.total)}</strong><span>Final roll needed</span><strong>${shot.targetNum}+</strong><em>${shot.lof.clear?"Line of fire is clear.":shot.lof.reason} ${Combat.inMountArc(car,target,weapon.mount)?"Target is in arc.":"Target is outside this mount's arc."}</em></div>`})()}`;
   }
   function checkEnd(){
     if(!player.alive||!ai.alive){
@@ -703,10 +857,12 @@
     // Faster car moves first; equal speed gives player initiative in prototype.
     if(ai.speed>player.speed){if(am)aiAct();if(pm)performMove(player,canChooseManeuver(selected.type)?selected:{type:"straight",d:0,label:"Go straight"})}
     else {if(pm)performMove(player,canChooseManeuver(selected.type)?selected:{type:"straight",d:0,label:"Go straight"});if(am)aiAct()}
+    resolveAutomaticDropped(player,pm);resolveAutomaticDropped(ai,am);resolvePendingGrenades();aiFireDecision();resolveFireIntents();
     log(`Turn ${turn}, Phase ${phase}: movement resolved.`);
     [player,ai].forEach(c=>{if(stunnedAtStart.get(c))c.stunnedPhases=Math.max(0,c.stunnedPhases-1);c.phaseDamage=0});
     checkEnd();
     if(phase===5){
+      resolveAutomaticFire(player,ai);resolveAutomaticFire(ai,player);resolveEndTurnFire(player);resolveEndTurnFire(ai);
       resolveOffroadWear(player);resolveOffroadWear(ai);
       player.handling=Math.min(player.hc,player.handling+Math.max(1,player.hc));
       ai.handling=Math.min(ai.hc,ai.handling+Math.max(1,ai.hc));
@@ -743,12 +899,16 @@
     // Destructible fixed barriers from the original arena layout.
     barriers.filter(b=>!b.destroyed).forEach(b=>{ctx.fillStyle="#6a7078";ctx.fillRect(b.x,b.y,b.w,b.h);ctx.fillStyle="#e1b95f";ctx.font="bold 9px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText(`${b.dp} DP`,b.x+b.w/2,b.y+b.h/2+3)});
     debris.forEach(piece=>{ctx.save();ctx.translate(piece.x,piece.y);ctx.rotate(rad((piece.x+piece.y)%180));ctx.fillStyle="#9b825b";ctx.strokeStyle="#241d14";ctx.lineWidth=2;ctx.fillRect(-6,-4,12,8);ctx.strokeRect(-6,-4,12,8);ctx.restore()});
+    combatHazards.filter(hazard=>hazard.active!==false).forEach(hazard=>{ctx.save();ctx.translate(hazard.x,hazard.y);ctx.rotate(rad(hazard.heading||0));const colors={mine:"#9b3037",spearMine:"#d44731",spikes:"#aab2bd",oil:"#08090a",flamingOil:"#f06b2d",smoke:"#79828d",paint:"#37b7d6",whitePhosphorus:"#e8edf5"};ctx.fillStyle=colors[hazard.type]||"#c89f49";ctx.globalAlpha=hazard.cloud?.45:.82;const w=hazard.length*SCALE,h=hazard.width*SCALE;if(hazard.cloud){ctx.beginPath();ctx.ellipse(0,0,w/2,h/2,0,0,Math.PI*2);ctx.fill()}else{ctx.fillRect(-w/2,-h/2,w,h);ctx.strokeStyle="#f4d98a";ctx.lineWidth=1.5;ctx.strokeRect(-w/2,-h/2,w,h)}ctx.globalAlpha=1;ctx.fillStyle="#fff";ctx.font="bold 8px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText(hazard.type.toUpperCase(),0,3);ctx.restore()});
+    pendingGrenades.forEach(grenade=>{ctx.save();ctx.translate(grenade.x,grenade.y);ctx.strokeStyle="#ffd276";ctx.setLineDash([4,3]);ctx.beginPath();ctx.arc(0,0,11,0,Math.PI*2);ctx.stroke();ctx.fillStyle="#ffd276";ctx.font="bold 8px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText(`G ${Math.max(0,grenade.dueSerial-phaseSerial())}`,0,-15);ctx.restore()});
     ctx.fillStyle="#b7bdc4";ctx.font="bold 12px sans-serif";ctx.textAlign="center";ctx.fillText("ARENA 01",W/2,70);
   }
   function drawArc(car){
     if(car!==player||!car.alive)return;
-    ctx.save();ctx.translate(car.x,car.y);ctx.rotate(rad(car.heading));
-    ctx.fillStyle="#f3c76322";ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,220,-Math.PI/4,Math.PI/4);ctx.closePath();ctx.fill();ctx.restore();
+    const weapon=selectedWeapons(car)[0];if(!weapon)return;const spec=weaponSpec(weapon);ctx.save();ctx.translate(car.x,car.y);ctx.fillStyle=spec.dropped?"#6fd7ff20":"#f3c76322";ctx.strokeStyle=spec.dropped?"#6fd7ff66":"#f3c76355";
+    if(spec.dropped){const point=dropPoint(car,weapon.mount);ctx.beginPath();ctx.arc(point.x-car.x,point.y-car.y,15,0,Math.PI*2);ctx.fill();ctx.stroke()}
+    else if(weapon.mount==="top"){ctx.beginPath();ctx.arc(0,0,220,0,Math.PI*2);ctx.fill()}
+    else{const center=Combat.mountArcCenter(car,weapon.mount);if(center!==null){ctx.rotate(rad(center));ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,220,-Math.PI/4,Math.PI/4);ctx.closePath();ctx.fill()}}ctx.restore();
   }
   function drawCrashTrail(car){
     if(!car.crashTrail?.length)return;
@@ -819,7 +979,7 @@
   function setZoom(next,cx=W/2,cy=H/2){const old=camera.zoom;next=Math.max(.45,Math.min(2.5,next));camera.x=cx-(cx-camera.x)*(next/old);camera.y=cy-(cy-camera.y)*(next/old);camera.zoom=next;draw()}
   function centerOn(car,redraw=true){camera.x=W/2-car.x*camera.zoom;camera.y=H/2-car.y*camera.zoom;if(redraw)draw()}
   function fitArena(){camera.zoom=Math.min(W/arena.w,H/arena.h)*.92;camera.x=(W-arena.w*camera.zoom)/2-arena.x*camera.zoom;camera.y=(H-arena.h*camera.zoom)/2-arena.y*camera.zoom;draw()}
-  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));if(roadSurface==="offroad"){[player,ai].forEach(c=>{c.hc=Math.max(0,c.hc-3);c.handling=c.hc})}[player,ai].forEach(c=>c.turnStartSpeed=c.speed);started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.6.3",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log(`Arena duel begins on ${roadSurface} with Chapter 2 driving rules.`,"warn");snapshot("Initial state");fitArena();updateUI();draw()}
+  $("startBtn").onclick=()=>{applyDesign(player,JSON.parse(localStorage.getItem("rdaSelectedPlayer")||"null"));applyDesign(ai,JSON.parse(localStorage.getItem("rdaSelectedAI")||"null"));combatHazards.length=0;pendingGrenades.length=0;pendingFireIntents.length=0;if(roadSurface==="offroad"){[player,ai].forEach(c=>{c.hc=Math.max(0,c.hc-3);c.handling=c.hc})}[player,ai].forEach(c=>c.turnStartSpeed=c.speed);started=true;replayMode=false;locked=false;rngState=rngSeed;replay={version:"0.7.0",seed:rngSeed,initial:{player:clone(player),ai:clone(ai)},frames:[],events:[]};replayReadOnly=false;$("startOverlay").style.display="none";log(`Arena duel begins on ${roadSurface} with Chapter 2 driving, Chapter 3 combat, and the Chapter 6 arsenal.`,"warn");snapshot("Initial state");fitArena();updateUI();draw()}
   function chooseBend(side){
     const angle=Number($("bendAngle").value||15);
     const d=Math.ceil(angle/15);setSelected(side==="left"?"bendL":"bendR",d,`${angle}° ${side} bend`,angle);
@@ -854,7 +1014,10 @@
     player.direction*=-1;player.changedSpeed=true;pendingSpeedDelta=0;
     log(`${player.name} selects ${player.direction<0?"reverse":"forward"} gear.`,"warn");updateUI();draw();
   };
-  $("fire").onclick=()=>{fire(player,ai);updateUI();draw();checkEnd()};
+  $("fire").onclick=()=>{fire(player,ai,$("weaponSelect")?.value);updateUI();draw();checkEnd()};
+  if($("toggleAuto"))$("toggleAuto").onclick=()=>{toggleAutomatic(player);draw()};
+  if($("weaponSelect"))$("weaponSelect").onchange=()=>{updateUI();draw()};
+  if($("targetLocation"))$("targetLocation").onchange=()=>{updateInspector();draw()};
 
   if($("zoomIn"))$("zoomIn").onclick=()=>setZoom(camera.zoom*1.2);
   if($("zoomOut"))$("zoomOut").onclick=()=>setZoom(camera.zoom/1.2);

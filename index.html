@@ -1,7 +1,7 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.6.3</title><link rel="stylesheet" href="styles.css?v=0.6.3"></head><body>
-<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.6.3 Chapter 2 Driving</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Road Duel Arena v0.7.0</title><link rel="stylesheet" href="styles.css?v=0.7.0"></head><body>
+<header><div><h1>Road Duel Arena</h1><div class="subtitle">Private hobby build — v0.7.0 Combat Arsenal</div></div><nav><button data-screen="menu">Main Menu</button><button data-screen="garage">Garage</button><button data-screen="arenaSetup">Arena Setup</button></nav></header>
 <main>
-<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Save it. Drive it.</h2><p>Version 0.6.3 keeps the full Chapter 2 driving system and fixes the controlled-skid button so it becomes available immediately after selecting a bend or swerve.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
+<section id="menu" class="screen active"><div class="hero"><div><div class="eyebrow">AUTODUEL ENGINEERING</div><h2>Build it. Arm it. Survive.</h2><p>Version 0.7.0 adds Chapter 3 vehicle combat and the complete Chapter 6 arsenal: selectable weapons, mount arcs, linked and automatic fire, component damage, incendiaries, visibility clouds, and persistent dropped hazards.</p><button class="primary" data-screen="garage">Enter Garage</button> <button data-screen="arenaSetup">Set Up Duel</button></div></div></section>
 
 <section id="garage" class="screen">
 <div class="sectionHead"><div><div class="eyebrow">VEHICLE DESIGN</div><h2>Garage</h2></div><div><button id="newVehicle">New Design</button> <button id="saveVehicle" class="primary">Save Vehicle</button></div></div>
@@ -15,7 +15,7 @@
 <div class="panel"><h3>Crew</h3><div class="formGrid"><label>Driver<input value="1" disabled></label><label>Gunners<input id="gunners" type="number" value="0" min="0"></label><label>Passengers<input id="passengers" type="number" value="0" min="0"></label></div><p class="hint">Drivers and gunners use two spaces and weigh 150 lb. Passengers use one space and weigh 150 lb.</p></div>
 <div class="panel"><h3>Armor</h3><label>Armor type<select id="armorType"></select></label><div class="armorGrid">
 <label>Front<input class="armorInput" data-side="front" type="number" value="20" min="0"></label><label>Right<input class="armorInput" data-side="right" type="number" value="10" min="0"></label><label>Left<input class="armorInput" data-side="left" type="number" value="10" min="0"></label><label>Back<input class="armorInput" data-side="back" type="number" value="15" min="0"></label><label>Top<input class="armorInput" data-side="top" type="number" value="5" min="0"></label><label>Under<input class="armorInput" data-side="under" type="number" value="5" min="0"></label></div></div>
-<div class="panel"><div class="panelTitleRow"><h3>Weapons</h3><button id="addWeapon">Add Weapon</button></div><div id="weaponRows"></div><p class="hint">Loaded weapon cost, weight, space, and ammunition are used. One direction may use no more than one-third of vehicle spaces.</p></div>
+<div class="panel"><div class="panelTitleRow"><h3>Weapons</h3><button id="addWeapon">Add Weapon</button></div><div id="weaponRows"></div><p class="hint">Loaded weapon cost, weight, space, and ammunition are used. Top mounts act as 360° turrets in the arena. A link adds $50; identical weapons on the same mount aim together. One direction may use no more than one-third of vehicle spaces.</p></div>
 </div><aside><div class="panel sticky summaryPanel">
 <div class="summaryVisual">
   <div class="showcaseHeader"><div><div class="eyebrow">LIVE BUILD · TOP DOWN</div><h3 id="showcaseName">Blue Comet</h3></div><span class="liveIndicator"><i></i>LIVE</span></div>
@@ -48,7 +48,7 @@
     <div class="overlay" id="startOverlay">
       <div class="card">
         <h2>Amateur Arena Duel</h2>
-        <p>Enter from opposite gates, maneuver through five phases per turn, and destroy the rival vehicle. This build automates Chapter 2 movement, every car maneuver, crash tables, directional collision damage, momentum transfer, fixed objects, debris, and driver concussion.</p>
+        <p>Enter from opposite gates, maneuver through five phases per turn, and destroy the rival vehicle. Chapter 3 combat and the complete Chapter 6 vehicle arsenal are active, including mount arcs, linked fire, internal components, fire, smoke, paint, mines, spikes, and oil.</p>
         <p class="tiny">The arena remains computer-first: calculations and tables are automatic, while the maneuver and risk decisions stay with you.</p>
         <button class="primary" id="startBtn">Start Duel</button>
       </div>
@@ -123,13 +123,17 @@
 
     <section class="panel">
       <h3>Weapons</h3>
-      <div class="controls">
-        <button id="fire" class="wide">Fire Front Machine Gun</button>
+      <div class="weaponControls">
+        <label class="controlLabel">Weapon or link<select id="weaponSelect"></select></label>
+        <label class="controlLabel">Target<select id="targetLocation"><option value="auto">Exposed side (auto)</option><option value="front">Front armor</option><option value="right">Right armor</option><option value="back">Back armor</option><option value="left">Left armor</option><option value="tire:fl">Front-left tire</option><option value="tire:fr">Front-right tire</option><option value="tire:rl">Rear-left tire</option><option value="tire:rr">Rear-right tire</option><option value="turret">Turret / top weapon</option></select></label>
+        <button id="fire" class="primary">Fire Selected</button><button id="toggleAuto">Automatic: Off</button>
       </div>
-      <p class="tiny">Base target 7+ on 2d. Range, target motion, and same-phase maneuver penalties are applied automatically.</p>
+      <p id="weaponHelp" class="tiny">Select any operational weapon installed in the garage. Mount arc, line of fire, range, relative motion, sustained fire, visibility, and specific-target modifiers are automatic.</p>
       <div class="statusGrid">
         <div class="stat"><b id="ammo">20</b><span>Ammo</span></div>
         <div class="stat"><b id="weaponDP">3</b><span>Weapon DP</span></div>
+        <div class="stat"><b id="powerUnits">250</b><span>Power units</span></div>
+        <div class="stat"><b id="fireActions">1</b><span>Fire actions left</span></div>
       </div>
     </section>
 
@@ -164,4 +168,4 @@
     </section>
   </aside>
 </section></main>
-<script src="src/data.js?v=0.6.3"></script><script src="src/garage.js?v=0.6.3"></script><script src="src/app.js?v=0.6.3"></script><script src="src/chapter2.js?v=0.6.3"></script><script src="src/arena.js?v=0.6.3"></script></body></html>
+<script src="src/data.js?v=0.7.0"></script><script src="src/garage.js?v=0.7.0"></script><script src="src/app.js?v=0.7.0"></script><script src="src/chapter2.js?v=0.7.0"></script><script src="src/chapter3.js?v=0.7.0"></script><script src="src/arena.js?v=0.7.0"></script></body></html>

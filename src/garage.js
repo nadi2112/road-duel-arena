@@ -1,5 +1,5 @@
 window.RDA_GARAGE=(()=>{
-const D=RDA_DATA,$=id=>document.getElementById(id);let rows=[{weapon:"mg",mount:"front"}],currentId=null;
+const D=RDA_DATA,$=id=>document.getElementById(id);let rows=[{weapon:"mg",mount:"front",link:"",grenadeType:"explosive"}],currentId=null;
 const options=m=>Object.entries(m).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join("");
 const money=n=>"$"+Math.round(n).toLocaleString();
 function init(){
@@ -11,12 +11,14 @@ $("frontTires").innerHTML=options(D.tires);$("frontTires").value="puncture";
 $("rearTires").innerHTML=options(D.tires);$("rearTires").value="puncture";
 $("armorType").innerHTML=options(D.armorTypes);
 document.querySelectorAll("#garage input,#garage select").forEach(e=>e.addEventListener("input",calculate));
-$("addWeapon").onclick=()=>{rows.push({weapon:"mg",mount:"front"});renderWeapons();calculate()};
+$("addWeapon").onclick=()=>{rows.push({weapon:"mg",mount:"front",link:"",grenadeType:"explosive"});renderWeapons();calculate()};
 $("saveVehicle").onclick=save;$("newVehicle").onclick=newVehicle;renderWeapons();calculate();refreshSaved();}
 function renderWeapons(){
-$("weaponRows").innerHTML=rows.map((r,i)=>`<div class="weaponRow"><select class="weaponType" data-i="${i}">${options(D.weapons)}</select><select class="weaponMount" data-i="${i}">${D.mounts.map(m=>`<option>${m}</option>`).join("")}</select><button class="danger removeWeapon" data-i="${i}">Remove</button></div>`).join("");
-document.querySelectorAll(".weaponType").forEach((e,i)=>{e.value=rows[i].weapon;e.onchange=()=>{rows[i].weapon=e.value;flashInstall();calculate()}});
+$("weaponRows").innerHTML=rows.map((r,i)=>`<div class="weaponRow"><select class="weaponType" data-i="${i}">${options(D.weapons)}</select><select class="weaponMount" data-i="${i}">${D.mounts.map(m=>`<option value="${m}">${m==="top"?"top turret":m==="under"?"underbody":m}</option>`).join("")}</select><select class="weaponLink" data-i="${i}" title="Optional Chapter 3 firing link"><option value="">Unlinked</option><option value="A">Link A</option><option value="B">Link B</option><option value="C">Link C</option></select><button class="danger removeWeapon" data-i="${i}">Remove</button>${r.weapon==="gl"?`<label class="grenadeLoad">Grenade magazine<select class="grenadeType" data-i="${i}">${options(D.grenades)}</select></label>`:""}</div>`).join("");
+document.querySelectorAll(".weaponType").forEach((e,i)=>{e.value=rows[i].weapon;e.onchange=()=>{rows[i].weapon=e.value;rows[i].grenadeType??="explosive";renderWeapons();flashInstall();calculate()}});
 document.querySelectorAll(".weaponMount").forEach((e,i)=>{e.value=rows[i].mount;e.onchange=()=>{rows[i].mount=e.value;flashInstall();calculate()}});
+document.querySelectorAll(".weaponLink").forEach((e,i)=>{e.value=rows[i].link||"";e.onchange=()=>{rows[i].link=e.value;calculate()}});
+document.querySelectorAll(".grenadeType").forEach(e=>{const i=+e.dataset.i;e.value=rows[i].grenadeType||"explosive";e.onchange=()=>{rows[i].grenadeType=e.value;calculate()}});
 document.querySelectorAll(".removeWeapon").forEach(e=>e.onclick=()=>{rows.splice(+e.dataset.i,1);renderWeapons();calculate()});}
 function flashInstall(){const a=$("vehicleArt");a.classList.remove("installPulse");void a.offsetWidth;a.classList.add("installPulse")}
 function armor(){const a={};document.querySelectorAll(".armorInput").forEach(e=>a[e.dataset.side]=Math.max(0,+e.value||0));return a}
@@ -32,12 +34,12 @@ function bodyGeometry(key){
  return map[key]||map.compact;
 }
 function weaponSymbol(key,x,y,angle=0,scale=1){
- const laser=["ll","ml","laser","hl"].includes(key),rocket=["hr","mr","ltr","rl"].includes(key),heavy=["ac","atg","rr","vmg"].includes(key);
+ const laser=["ll","ml","laser","hl","irll","irml","irlaser","irhl"].includes(key),rocket=["hr","mr","ltr","mml","mnr","mfr","rl"].includes(key),heavy=["ac","atg","rr","vmg","gl","sg"].includes(key);
  let art="";
  if(rocket) art=`<g class="weapon rocket"><rect x="-20" y="-10" width="42" height="20" rx="5"/><circle cx="-9" cy="0" r="5"/><path d="M22 -8 L38 0 L22 8Z"/><path class="weaponMark" d="M-1 -7V7M8-7V7"/></g>`;
  else if(laser) art=`<g class="weapon laser"><rect x="-22" y="-7" width="45" height="14" rx="7"/><path d="M23 -5 L41 0 L23 5Z"/><circle class="weaponGlow" cx="40" cy="0" r="5"/></g>`;
  else if(key==="ft") art=`<g class="weapon flame"><rect x="-19" y="-9" width="38" height="18" rx="5"/><path d="M19 -6L38 -3V3L19 6Z"/><path class="weaponMark" d="M-8-9V9M4-9V9"/></g>`;
- else if(["md","oj","ss"].includes(key)) art=`<g class="weapon dropper"><rect x="-19" y="-11" width="38" height="22" rx="5"/><circle cx="-8" cy="0" r="4"/><circle cx="8" cy="0" r="4"/></g>`;
+ else if(["md","smd","sd","oj","foj","ss","ps"].includes(key)) art=`<g class="weapon dropper"><rect x="-19" y="-11" width="38" height="22" rx="5"/><circle cx="-8" cy="0" r="4"/><circle cx="8" cy="0" r="4"/></g>`;
  else art=`<g class="weapon gun ${heavy?'heavy':''}"><rect x="-18" y="-8" width="34" height="16" rx="5"/><rect x="12" y="-4" width="34" height="8" rx="3"/><circle cx="-8" cy="0" r="5"/><path class="weaponMark" d="M18-4V4M25-4V4"/></g>`;
  return `<g class="mountedWeapon" transform="translate(${x} ${y}) rotate(${angle}) scale(${scale})">${art}</g>`;
 }
@@ -90,13 +92,13 @@ function renderVehicle(d){
 function calculate(){
 const body=D.bodies[$("bodyType").value],ch=D.chassis[$("chassisType").value],su=D.suspensions[$("suspensionType").value],p=D.plants[$("plantType").value],ft=D.tires[$("frontTires").value],rt=D.tires[$("rearTires").value],at=D.armorTypes[$("armorType").value],a=armor();
 const crew={drivers:1,gunners:+$("gunners").value||0,passengers:+$("passengers").value||0},crewW=(1+crew.gunners+crew.passengers)*150,crewS=(1+crew.gunners)*2+crew.passengers;
-const ws=rows.map(r=>({...r,...D.weapons[r.weapon]})),weaponW=ws.reduce((s,w)=>s+w.weight,0),weaponC=ws.reduce((s,w)=>s+w.cost,0),weaponS=ws.reduce((s,w)=>s+w.spaces,0);
+const ws=rows.map(r=>{const spec={...r,...D.weapons[r.weapon]};if(r.weapon==="gl"){const grenade=D.grenades[r.grenadeType||"explosive"];spec.cost=1050+10*grenade.cost;spec.weight=240}return spec}),linkCount=new Set(rows.map(r=>r.link).filter(Boolean)).size,weaponW=ws.reduce((s,w)=>s+w.weight,0),weaponC=ws.reduce((s,w)=>s+w.cost,0)+linkCount*50,weaponS=ws.reduce((s,w)=>s+w.spaces,0);
 const pts=Object.values(a).reduce((s,n)=>s+n,0),armorW=pts*body.armorWeight*at.weightMod,armorC=pts*body.armorCost*at.costMod,tireW=2*ft.weight+2*rt.weight,tireC=2*ft.cost+2*rt.cost;
 const maxLoad=Math.round(body.maxLoad*(1+ch.loadMod)),weight=Math.round(body.weight+p.weight+tireW+crewW+weaponW+armorW),spaces=p.spaces+crewS+weaponS,cost=Math.round(body.cost+body.cost*ch.costMod+body.cost*su.costMod+p.cost+tireC+weaponC+armorC),budget=+$("budget").value||0;
 let acceleration=0;if(p.power>=weight)acceleration=15;else if(p.power>=weight/2)acceleration=10;else if(p.power>=weight/3)acceleration=5;
 const topSpeed=Math.floor((360*p.power/(p.power+weight))/2.5)*2.5;let hc=su.hc;if(body.kind==="van"||(body.kind==="pickup"&&weight>5500))hc=su.vanHC;if(body.kind==="sub")hc=su.subHC;
 const dirs={};ws.forEach(w=>dirs[w.mount]=(dirs[w.mount]||0)+w.spaces);const limit=Math.floor(body.spaces/3),errors=[];
-if(weight>maxLoad)errors.push(`Over maximum load by ${weight-maxLoad} lb.`);if(spaces>body.spaces)errors.push(`Uses ${(spaces-body.spaces).toFixed(1)} too many component spaces.`);if(!acceleration)errors.push("Underpowered: power factors are below one-third of vehicle weight.");Object.entries(dirs).forEach(([m,s])=>{if(s>limit)errors.push(`${m} weapons use ${s} spaces; maximum is ${limit}.`)});if(cost>budget)errors.push(`Over budget by ${money(cost-budget)}.`);if($("chassisType").value==="extraHeavy"&&(body.kind==="pickup"||body.kind==="van"))errors.push("Extra-Heavy pickups and vans require six wheels, planned for a later builder update.");
+if(weight>maxLoad)errors.push(`Over maximum load by ${weight-maxLoad} lb.`);if(spaces>body.spaces)errors.push(`Uses ${(spaces-body.spaces).toFixed(1)} too many component spaces.`);if(!acceleration)errors.push("Underpowered: power factors are below one-third of vehicle weight.");Object.entries(dirs).forEach(([m,s])=>{if(s>limit)errors.push(`${m} weapons use ${s} spaces; maximum is ${limit}.`)});ws.forEach(w=>{if(w.mountRule==="rearSide"&&!["back","left","right"].includes(w.mount))errors.push(`${w.name} must face back, left, or right.`)});[...new Set(ws.map(w=>w.link).filter(Boolean))].forEach(link=>{const group=ws.filter(w=>w.link===link),hasTurret=group.some(w=>w.mount==="top"),hasBody=group.some(w=>w.mount!=="top");if(hasTurret&&hasBody)errors.push(`Link ${link} mixes turret and body weapons; that requires a Chapter 7 smart link.`)});if(cost>budget)errors.push(`Over budget by ${money(cost-budget)}.`);if($("chassisType").value==="extraHeavy"&&(body.kind==="pickup"||body.kind==="van"))errors.push("Extra-Heavy pickups and vans require six wheels, planned for a later builder update.");
 const d={id:currentId||("v-"+Date.now()+"-"+Math.random().toString(36).slice(2,7)),name:$("vehicleName").value.trim()||"Unnamed Vehicle",budget,bodyKey:$("bodyType").value,bodyName:body.name,chassisKey:$("chassisType").value,suspensionKey:$("suspensionType").value,plantKey:$("plantType").value,plantName:p.name,frontTireKey:$("frontTires").value,rearTireKey:$("rearTires").value,armorTypeKey:$("armorType").value,paintColor:$("paintColor").value,paintFinish:$("paintFinish").value,armor:a,crew,weapons:rows.map(x=>({...x})),weight,maxLoad,spaces,maxSpaces:body.spaces,cost,acceleration,topSpeed,hc,power:p.power,valid:!errors.length};
 showSummary(d,errors);renderVehicle(d);window.RDA_CURRENT_DESIGN=d;return d;}
 function meter(id,r){const e=$(id);e.style.width=Math.min(100,r*100)+"%";e.classList.toggle("over",r>1)}
@@ -104,6 +106,6 @@ function showSummary(d,errors){$("weightText").textContent=`${d.weight.toLocaleS
 function getSaved(){return JSON.parse(localStorage.getItem("rdaVehicles")||"[]")}function write(a){localStorage.setItem("rdaVehicles",JSON.stringify(a))}
 function save(){const d=calculate();if(!d.valid&&!confirm("This design has errors. Save it anyway?"))return;const a=getSaved(),i=a.findIndex(x=>x.id===d.id);if(i>=0)a[i]=d;else a.push(d);write(a);currentId=d.id;refreshSaved();RDA_APP.refreshArenaLists();alert(d.name+" saved.")}
 function refreshSaved(){const a=getSaved();$("savedVehicles").innerHTML=a.length?a.map(v=>`<div class="savedItem"><div><b>${v.name}</b><small>${v.bodyName} · ${v.weight} lb · ${money(v.cost)}</small></div><button data-load="${v.id}">Load</button><button class="danger" data-delete="${v.id}">×</button></div>`).join(""):'<p class="hint">No saved vehicles yet.</p>';document.querySelectorAll("[data-load]").forEach(e=>e.onclick=()=>load(e.dataset.load));document.querySelectorAll("[data-delete]").forEach(e=>e.onclick=()=>{write(getSaved().filter(v=>v.id!==e.dataset.delete));refreshSaved();RDA_APP.refreshArenaLists()})}
-function load(id){const d=getSaved().find(x=>x.id===id);if(!d)return;currentId=d.id;$("vehicleName").value=d.name;$("budget").value=d.budget;$("bodyType").value=d.bodyKey;$("chassisType").value=d.chassisKey;$("suspensionType").value=d.suspensionKey;$("plantType").value=d.plantKey;$("frontTires").value=d.frontTireKey;$("rearTires").value=d.rearTireKey;$("armorType").value=d.armorTypeKey;$("paintColor").value=d.paintColor||"#d94b43";$("paintFinish").value=d.paintFinish||"gloss";$("gunners").value=d.crew.gunners;$("passengers").value=d.crew.passengers;document.querySelectorAll(".armorInput").forEach(e=>e.value=d.armor[e.dataset.side]||0);rows=d.weapons.map(x=>({...x}));renderWeapons();calculate()}
-function newVehicle(){currentId=null;rows=[{weapon:"mg",mount:"front"}];$("vehicleName").value="New Duelist";$("paintColor").value="#d94b43";renderWeapons();calculate()}
+function load(id){const d=getSaved().find(x=>x.id===id);if(!d)return;currentId=d.id;$("vehicleName").value=d.name;$("budget").value=d.budget;$("bodyType").value=d.bodyKey;$("chassisType").value=d.chassisKey;$("suspensionType").value=d.suspensionKey;$("plantType").value=d.plantKey;$("frontTires").value=d.frontTireKey;$("rearTires").value=d.rearTireKey;$("armorType").value=d.armorTypeKey;$("paintColor").value=d.paintColor||"#d94b43";$("paintFinish").value=d.paintFinish||"gloss";$("gunners").value=d.crew.gunners;$("passengers").value=d.crew.passengers;document.querySelectorAll(".armorInput").forEach(e=>e.value=d.armor[e.dataset.side]||0);rows=d.weapons.map(x=>({link:"",grenadeType:"explosive",...x}));renderWeapons();calculate()}
+function newVehicle(){currentId=null;rows=[{weapon:"mg",mount:"front",link:"",grenadeType:"explosive"}];$("vehicleName").value="New Duelist";$("paintColor").value="#d94b43";renderWeapons();calculate()}
 return{init,calculate,getSaved,load};})();

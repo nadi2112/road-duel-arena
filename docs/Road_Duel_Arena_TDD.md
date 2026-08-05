@@ -1,8 +1,8 @@
 Road Duel Arena
 Game Design & Technical Design Document
-Document Version: 1.6
-Game Version: v0.6.3
-Next Milestone: live-play refinement of Chapter 2 driving and collisions
+Document Version: 1.7
+Game Version: v0.7.0
+Next Milestone: live-play refinement of Chapter 3 combat and weapon balance
 
 1. Project Overview
 Project Goals
@@ -63,13 +63,13 @@ Rapid testing and iteration
 Straightforward sharing with friends
 All versions are stored in GitHub and can be found here: github.com/nadi2112/road-duel-arena. Eventually, the plan is to use GitHub pages to host the web based game so that it can be shared and played by friends. This would be useful to debug gameplay and also help suggest any features or improvements. At some point an online play mode should be implemented to enable gameplay between different users online.
 Current Version
-The current release baseline is v0.6.3, built on the approved v0.5.1 garage.
+The current release baseline is v0.7.0, built on the approved v0.6.3 driving and collision system.
 Major implemented systems include:
 Arena movement
 The complete Chapter 2 car maneuver set
 Head-on, rear-end, T-bone, and sideswipe collision procedures
 Fixed-object, barrier, and wall impacts
-Basic vehicle combat
+Chapter 3 vehicle combat and the complete Chapter 6 vehicle arsenal
 Computer-controlled opponent behavior
 Garage and vehicle construction
 Handling and crash resolution
@@ -80,16 +80,13 @@ Developer inspector
 Combat log
 Crash-state visual indicators
 Current Milestone
-The v0.6.3 Chapter 2 driving milestone is complete, including sustained-contact, natural fixed-object placement, and the controlled-skid button refresh fix.
+The v0.7.0 Combat Arsenal milestone is complete. The arena now uses every weapon installed in a saved design instead of substituting a front machine gun.
 Completed goals:
-Added every remaining car maneuver from Chapter 2.
-Implemented the four vehicle-collision classes and their distinct speed procedures.
-Applied vehicle weight, impact direction, armor location, and road conditions to collision results.
-Added fixed-object impacts, debris, collision hazards, and optional concussion checks.
-Preserved continuous-contact state so one impact is not assessed again every phase.
-Stopped a pushing vehicle and a lead vehicle together when the lead vehicle is pinned against a barrier or wall.
-Preserved the valid portion of a move so vehicles finish immediately against a struck wall or barrier.
-Added unit tests for the Chapter 2 calculation layer.
+Added all 30 Chapter 6 vehicle weapon entries and twelve grenade loads.
+Added weapon selection, link groups, mount arcs, targeted locations, ammunition, DP, and power tracking.
+Implemented Chapter 3 targeting, declared simultaneous fire, sustained and automatic fire, component damage, fire, explosions, visibility clouds, and dropped hazards.
+Preserved every v0.6.3 movement, crash, and collision regression test.
+Added a Chapter 3 rules module, arsenal tests, and a headless multi-weapon arena integration test.
 
 2. Design Philosophy
 Computer-First Design
@@ -196,27 +193,35 @@ Other crash-table results
 Crash movement preserves the distinction between vehicle heading and momentum.
 Visual indicators show the current crash state, travel path, and vehicle orientation.
 ## Weapons
-Combat currently supports basic vehicle weapon use.
-The complete weapon system is intended to include all applicable weapons from the reference rules, including their:
+Combat supports every Chapter 6 vehicle weapon. Each installed weapon has independent runtime state for:
 Firing arcs
 Range behavior
 Accuracy modifiers
 Damage
 Ammunition
+Damage points
+Mount and optional link group
+Automatic-fire state
+Sustained-fire history
+Laser power consumption
 Space and weight requirements
 Special effects
-Weapons that require adaptation for computer play will be documented individually.
+Top mounts are treated as 360-degree turrets. Underbody direct-fire weapons cannot establish a normal line of fire, while underbody dropped weapons remain useful.
 ## Combat
 Combat is based on positioning, range, firing arcs, and line of sight.
 A typical attack includes:
 Select a weapon and target.
-Verify range and firing arc.
-Resolve the attack.
+Optionally select an exposed armor side, tire, or turret.
+Declare fire for the current phase.
+Commit movement for both vehicles.
+Resolve all declared player and AI fire simultaneously.
 Apply armor or internal damage.
 Record the result in the combat log.
+
+The modifier stack includes range, the Chapter 3 relative-arc movement matrix, stationary firer and target, vehicle profile, target location, target-side angle, rain, smoke/paint, road surface, painted windshield, sustained fire, maneuver difficulty, and skid/crash penalties.
 ## Damage
 Damage is applied first to the affected armor location and then to internal vehicle systems when armor is penetrated.
-The long-term damage model should support:
+The damage model supports:
 Directional armor
 Internal components
 Weapons
@@ -225,6 +230,8 @@ Crew
 Power plants
 Mobility loss
 Vehicle destruction
+
+Penetrating fire follows a consistent computer-managed internal order. Side hits choose randomly among valid internal locations; multiple same-mount weapons and crew members are also selected randomly per attack. Fireproof, reflective, reflective-fireproof, and metal armor keep their distinct combat properties.
 ## Garage
 The garage supports vehicle construction and configuration.
 Vehicle design may include:
@@ -260,6 +267,16 @@ Additional scenario types may be added later.
 
 # 4. Rule Deviations
 This section records deliberate differences from previous implementations or literal tabletop presentation.
+## Combat Declaration and Simultaneous Resolution
+The player declares one or more attacks before committing phase movement. The AI declares after both vehicles move, and all valid declarations then resolve as one simultaneous fire step. This preserves the rule that combat follows movement and prevents a destroyed vehicle from losing fire it had already declared, without adding a separate written-order interface.
+## Top Mounts
+The Garage's top mount acts as a 360-degree turret. This preserves old saved-design data while making top-mounted direct-fire weapons tactically useful. Underbody mounts remain available primarily for dropped weapons.
+## Internal Component Order
+The tabletop player may arrange the crew, power plant, and cargo locations. Until the Garage gains a component-layout editor, the simulation uses a stable power-plant, crew, cargo order from front to back and reverses that order from the rear. Side, top, and underbody penetrations choose among eligible internal locations.
+## Grenade Magazines and Ground Targeting
+Each grenade launcher currently stores one grenade type per magazine rather than an ordered mixture. Spike-gun area fire uses the opponent's current position as the selected ground square. Both choices keep the interface compact until direct arena-square targeting and mixed magazines are added.
+## Entity-Limited Rules
+The current arena has cars but no pedestrians, cycles, trikes, or buildings. Rules that require those entities do not activate. Vehicle-applicable grenade, fire, visibility, and dropped-weapon rules do activate.
 ## Crash Skids
 Original interpretation:
 The vehicle continued straight before entering the skid.
@@ -355,11 +372,17 @@ Crash-state termination
 ## Combat Engine
 The combat engine resolves:
 Target validity
-Firing arcs
-Range
-Hit determination
-Damage
-Ammunition use
+Per-mount firing arcs and mount-origin line of fire
+Declared and simultaneous phase fire
+Range and relative-arc movement
+Complete vehicle targeting modifiers
+Hit determination and sustained fire
+Linked and automatic fire
+Armor and internal-component damage
+Ammunition, weapon DP, and laser power
+Fire, burn duration, and explosions
+Persistent mines, spikes, oil, smoke, and paint
+Grenade flight, scatter, and vehicle effects
 Combat-log events
 ## Collision Engine
 The collision engine supports:
@@ -444,6 +467,8 @@ Commit and tag the release.
 Publish the playable build through GitHub Pages when ready.
 
 # 6. Version History
+## v0.7.0 — Combat Arsenal
+Replaced the prototype machine-gun attack with the complete Chapter 3 vehicle-combat engine and Chapter 6 arsenal. Added declared simultaneous fire, all mount arcs, target locations and modifiers, links, automatic fire, component damage, fire, explosions, grenades, persistent hazards, replay state, and combat tests.
 ## v0.1 — Arena Prototype
 Introduced:
 Arena
@@ -535,24 +560,15 @@ Animation
 AI support
 Testing
 Documentation of any adaptations
-## Weapon Expansion
-Implement all applicable weapons from the reference rules.
-Work includes:
-Weapon statistics
-Firing arcs
-Range and accuracy
-Damage
-Ammunition
-Special effects
-Garage integration
-AI use
-Visual and audio feedback
+## Weapon Expansion — Completed in v0.7.0
+Delivered the complete Chapter 6 vehicle catalog, Garage integration, weapon selection, links, mount arcs, special effects, AI use, arena hazard rendering, and automated combat tests.
 ## Medium-Term
 Planned systems include:
 Improved AI
 Multiple AI vehicles
 Additional arena layouts
-Expanded damage modeling
+Garage component-layout editor and Chapter 7 combat accessories
+Direct arena-square targeting and mixed grenade magazines
 Sound effects
 Improved visual effects
 ## Long-Term

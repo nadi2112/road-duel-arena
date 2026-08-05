@@ -1,55 +1,58 @@
-# Road Duel Arena v0.6.3
+# Road Duel Arena v0.7.0
 
-Open `index.html` directly in a modern browser.
+Open `index.html` directly in a modern browser, or run `npm install` followed by `npm run dev`.
 
-## v0.6.3 highlights
+## v0.7.0 Combat Arsenal
 
-- Enables Add Skid immediately after selecting an eligible bend or swerve; the speed-dropdown workaround is no longer needed.
-- Preserves the existing controlled-skid mechanics and the v0.6.2 collision/contact behavior.
+This release adds the vehicle-applicable combat rules from Chapter 3 and the complete Chapter 6 arsenal while preserving the v0.6.3 driving and collision behavior.
 
-- Preserves the approved v0.5.1 garage presentation and vehicle renderer.
-- Adds steep drifts, swerves, controlled skids, T-stops, bootlegger reverses, and 5 mph pivots.
-- Adds rapid-braking difficulty and tire-damage consequences.
-- Resolves head-on, rear-end, T-bone, and sideswipe collisions separately.
-- Uses impact orientation, relative speed, vehicle weight/Damage Modifier, and the Temporary Speed Table.
-- Applies collision damage to the correct armor faces, including metal-armor collision protection.
-- Adds fixed-object rams, destructible barriers, wall impacts, collision hazards, debris, and optional concussion checks.
-- Prevents repeated damage while vehicles remain in continuous contact.
-- Treats equal-speed contact as sustained pushing rather than a new collision.
-- Stops both vehicles when a pushed vehicle is pinned against a barrier or wall.
-- Places vehicles at the last safe point immediately against a wall or barrier instead of canceling the entire phase move.
-- Sweeps both translation and rotation so angled impacts and pivots cannot jump into fixed scenery.
-- Keeps contact state from actual vehicle outlines so separating movement remains available.
-- Adds arena-surface handling modifiers and off-road wear.
+### Weapons and firing
 
-## Preserved v0.5.1 garage highlights
+- Select any installed weapon or linked group in the arena.
+- Fire through front, back, left, right, or 360-degree turret arcs.
+- Select the exposed armor side, a specific tire, or a turret as the target.
+- Declare fire before committing movement; player and AI attacks resolve together after movement.
+- Track ammunition, weapon DP, power units, one-shot rockets, six independent MFR rockets, laser drain, gunner firing actions, sustained fire, and automatic fire.
+- Use the full range, relative-motion, vehicle-profile, visibility, road, maneuver, skid, paint, and specific-target modifier stack.
 
-- New layered SVG vehicle renderer in the Garage.
-- Nine body silhouettes change live with the selected body type.
-- Mounted weapons are drawn at their selected front, rear, left, right, top, or underbody positions.
-- Dynamic paint color and gloss, metallic, or matte finishes.
-- Visual tire, armor, pickup-bed, van, wagon, and camper treatments.
-- Compact top-down live build now sits above the sticky Design Summary.
-- Front and rear tire choices render independently with distinct tread, size, and sidewall treatments.
-- Front, back, left, right, top, and underbody armor render independently with numeric point badges.
-- Pickup proportions now use a larger bed, compact cab, and shorter hood.
-- Workshop presentation no longer uses the three-quarter transform or circular turntable.
-- Animated installation, scan-light, and live-status feedback keep the build bay active without obscuring the car.
-- Visual configuration is saved with each vehicle design.
+### Damage and fire
 
-## Existing major systems
+- Penetrating attacks damage weapons, the power plant, crew, cargo, and opposite-side components in Chapter 3 order.
+- Driver wounds cause handling hazards; destroyed plants stop acceleration and laser fire.
+- Fireproof, reflective, reflective-fireproof, and metal armor apply their special combat behavior.
+- Flamethrowers, lasers, flaming oil, thermite, and white phosphorus contribute cumulative fire modifiers.
+- Burning vehicles damage every armor face, component, occupant, and tire, and volatile loads may explode.
+
+### Persistent arena effects
+
+- Minedroppers, Spear 1000 mines, spikes, oil, and flaming oil remain where deployed.
+- Smoke and paint affect line of fire; ordinary lasers cannot fire through them, while infrared lasers can at reduced damage.
+- Paint coats windshields, oil increases maneuver and hazard difficulty, and flaming oil burns out into smoke.
+- Grenade launchers use one-second flight and scatter, with twelve selectable grenade magazine types.
+
+### Complete Chapter 6 catalog
+
+The Garage now includes AC, MG, RR, VMG, ATG, GL, SG, HR, LtR, MR, MML, MNR, MFR, RL, LL, ML, L, HL, four infrared lasers, FT, PS, SS, FOJ, OJ, MD, SMD, and SD.
+
+## Existing systems preserved
+
 - Garage and saved vehicle designs
-- Phase-based movement, forward and reverse gear
-- Full car maneuver set, rapid braking, handling, control checks, and crash tables
+- Exact five-phase movement through 100 mph
+- Forward and reverse gear
+- Full car maneuver set and rapid braking
+- Handling, control checks, and crash tables
 - Skids, spins, rolls, vaults, and directional momentum
-- Four vehicle-collision classes plus fixed-object and wall impacts
-- Basic combat and directional armor
-- Deterministic replay export/import
+- Four vehicle-collision classes, fixed-object rams, barriers, walls, and debris
+- Deterministic replay export/import, now including combat hazards and pending attacks
 - Camera zoom, pan, follow, fit, and center controls
 - Developer inspector and categorized combat log
 
 ## Hotkeys
-Arrows/WQEX drive, A/D drift, S straight, V changes gear while eligible, F fires, Space/Enter commits, H opens help, and Escape closes help/selects straight.
 
-## Remaining approximations
-Top-down rollover/vault presentation and physical vehicle conforming after an impact are practical computer-first approximations. The Chapter 2 collision tables, damage, armor faces, speed transfer, hazards, and no-repeat-contact rule are implemented.
+Arrows/WQEX drive, A/D drift, S selects straight, V changes gear while eligible, F declares the selected weapon, Space/Enter commits the phase, H opens help, and Escape closes help/selects straight.
+
+## Tests
+
+Run `npm test` for the Chapter 2 calculation suite, Chapter 3 combat calculations, complete-arsenal checks, and a headless multi-weapon arena smoke test.
+
+See `RULE_COVERAGE.md` for exact coverage and documented computer-first adaptations.

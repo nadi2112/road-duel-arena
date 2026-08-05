@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.7.0 - Combat Arsenal
+
+- Replaced the arena's hard-coded front machine gun with selectable per-weapon combat state.
+- Added the complete 30-entry Chapter 6 vehicle-weapon catalog, including infrared laser variants and all dropped weapons.
+- Added optional A/B/C weapon links and selectable grenade-launcher magazines to the Garage.
+- Added front, back, left, right, turret, and underbody mount behavior with visible selected-weapon arcs.
+- Added Chapter 3 line of fire, relative-arc movement, complete vehicle targeting modifiers, targeted armor sides, tire shots, turret shots, sustained fire, and impossible-shot handling.
+- Added declared fire that resolves after movement so player and AI attacks in a phase are simultaneous.
+- Added driver/gunner firing-action limits, per-weapon rate of fire, automatic fire, linked groups, MFR multi-projectile attacks, and laser power drain.
+- Added component-level penetration through weapons, power plant, crew, cargo, and opposite-side systems.
+- Added fireproof, reflective, reflective-fireproof, and weapon-hit metal armor behavior.
+- Added cumulative incendiary modifiers, burn duration, all-component vehicle fire, volatile-load explosions, and blast damage.
+- Added persistent mines, Spear 1000 mines, spikes, oil, flaming oil, smoke, and paint with map rendering and contact effects.
+- Added grenade-launcher flight time, scatter, and vehicle-applicable grenade effects.
+- Extended replay frames to retain hazards, grenades, and declared attacks.
+- Added a Chapter 3 calculation module, complete-arsenal regression checks, and a headless multi-weapon arena smoke test.
+
 ## v0.6.3 - Controlled-Skid Button Refresh
 
 - Fixed Add Skid remaining disabled after selecting an eligible bend or swerve.
